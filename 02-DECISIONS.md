@@ -92,3 +92,9 @@ Mark = a droplet holding a countdown ring; the amber dot marks time already gone
 (no confusion with their brand). Wordmark and tagline are outlined paths (Space Grotesk, OFL) because GitHub does not load
 fonts inside SVG. `scripts/make-assets.py` rebuilds banner-{light,dark}.svg and social.png. The demo GIF is a real recording
 (asciinema + agg), with spinner time compressed; nothing in it is staged.
+
+## D12 (23 Nov 2026): README header follows the house format
+The owner asked why the header did not match the author's other projects (mypii). It now uses the same layout: square logo
+(112 px, PNG 512 with a dark-theme variant), `<h1>`, one badge row (CI, PyPI, MCP Registry, licence), a bold English tagline with the
+Malay one in italics, and a credit line. The wide banners stay in `assets/` but are no longer used by the README. The PyPI page
+picks up the new header with the next release.
