@@ -1,13 +1,11 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
-    <img alt="dofleet" src="assets/banner-light.svg" width="560">
-  </picture>
-</p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark-512.png"><img src="assets/logo-512.png" width="112" height="112" alt="dofleet"></picture></p>
 
-<p align="center"><a href="README.md">English</a></p>
+<h1 align="center">dofleet</h1>
 
-Droplet DigitalOcean pakai-buang yang membersihkan dirinya sendiri.
+<p align="center"><a href="https://pypi.org/project/dofleet/"><img src="https://img.shields.io/pypi/v/dofleet" alt="PyPI"></a> <a href="https://github.com/aimanmalib/dofleet/blob/main/LICENSE"><img src="https://img.shields.io/badge/lesen-MIT-blue" alt="Lesen: MIT"></a></p>
+
+<p align="center"><b>Droplet DigitalOcean pakai-buang yang memadam dirinya sendiri.</b><br>
+<a href="README.md">English</a> · Dibina di Malaysia oleh <a href="https://aimanmalib.com">Aiman Malib</a> · <a href="https://sasateguh.com">Sasa Teguh</a></p>
 
 Setiap droplet yang dicipta `dofleet` membawa pemasa tamat, dan reaper memadamnya bila masa tamat, sama ada anda ingat atau tidak. Anda nampak kos sebelum mengesahkan, bajet bulanan menghalang anda daripada melepasinya, dan saiz yang habis stok beralih ke pilihan seterusnya dalam pratetap.
 

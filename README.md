@@ -1,30 +1,13 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
-    <img alt="dofleet: disposable droplets that clean up after themselves" src="assets/banner-light.svg" width="560">
-  </picture>
-</p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark-512.png"><img src="assets/logo-512.png" width="112" height="112" alt="dofleet"></picture></p>
+
+<h1 align="center">dofleet</h1>
 
 <!-- mcp-name: io.github.aimanmalib/dofleet -->
 
-<p align="center">
-  <a href="https://github.com/aimanmalib/dofleet/actions/workflows/ci.yml"><img alt="tests" src="https://github.com/aimanmalib/dofleet/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-0E2A3D">
-  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0E2A3D">
-  <img alt="Tested on a live DigitalOcean account" src="https://img.shields.io/badge/tested%20on-a%20live%20DigitalOcean%20account-0F9F8F">
-  <img alt="MCP server" src="https://img.shields.io/badge/MCP-server-0F9F8F">
-  <img alt="English and Bahasa Melayu" src="https://img.shields.io/badge/i18n-English%20%7C%20Bahasa%20Melayu-4B6475">
-</p>
+<p align="center"><a href="https://github.com/aimanmalib/dofleet/actions/workflows/ci.yml"><img src="https://github.com/aimanmalib/dofleet/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <a href="https://pypi.org/project/dofleet/"><img src="https://img.shields.io/pypi/v/dofleet" alt="PyPI"></a> <a href="https://registry.modelcontextprotocol.io/v0/servers?search=io.github.aimanmalib/dofleet"><img src="https://img.shields.io/badge/MCP%20Registry-io.github.aimanmalib%2Fdofleet-0F9F8F" alt="MCP Registry"></a> <a href="https://github.com/aimanmalib/dofleet/blob/main/LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue" alt="Licence: MIT"></a></p>
 
-<p align="center">
-  <a href="#install">Install</a> ·
-  <a href="#jobs-with-run">Jobs</a> ·
-  <a href="#budget">Budget</a> ·
-  <a href="#the-reaper">Reaper</a> ·
-  <a href="#ai-agents-mcp">AI agents</a> ·
-  <a href="#github-action">GitHub Action</a> ·
-  <a href="README.ms.md">Bahasa Melayu</a>
-</p>
+<p align="center"><b>Disposable DigitalOcean droplets that delete themselves.</b> · <i>Droplet DigitalOcean pakai-buang yang memadam dirinya sendiri.</i><br>
+<a href="https://pypi.org/project/dofleet/">PyPI</a> · <a href="#ai-agents-mcp">MCP server</a> · <a href="#the-reaper">reaper</a> · <a href="README.ms.md">Bahasa Melayu</a> · Built in Malaysia by <a href="https://aimanmalib.com">Aiman Malib</a> · <a href="https://sasateguh.com">Sasa Teguh</a></p>
 
 Every droplet `dofleet` creates carries an expiry timer, and a reaper deletes it when the timer runs out, whether or not you remember. You see what a batch costs before you confirm, a month budget stops you before you pass it, and a sold-out size falls back to the next one in your preset instead of failing.
 
