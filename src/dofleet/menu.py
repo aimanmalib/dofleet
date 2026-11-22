@@ -33,7 +33,7 @@ def _run(cli, choice: str) -> None:
         count = typer.prompt(t("menu.count"), default=1, type=int)
         ttl = typer.prompt(t("menu.ttl"), default=cli.S.settings.presets.get(preset, {}).get("ttl") or "")
         cli.up(preset=preset, name=name, count=count, ttl=ttl, keep=not ttl, region=[], size=[], image=None,
-               tag=[], var=[], yes=False, dry_run=False, no_wait=False)
+               tag=[], var=[], volume=[], yes=False, dry_run=False, no_wait=False)
     elif choice == "2":
         cli.ls(managed=False)
     elif choice == "3":

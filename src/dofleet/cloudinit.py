@@ -11,7 +11,7 @@ import string
 from importlib import resources
 from pathlib import Path
 
-DEFAULT_VARS = {"user": "ops", "password_auth": "no", "rdp_port": "3389"}
+DEFAULT_VARS = {"user": "ops", "password_auth": "no", "root_login": "prohibit-password", "rdp_port": "3389"}
 USER_DATA_LIMIT = 64 * 1024  # DigitalOcean rejects user_data over 64 KiB
 _INCLUDE = re.compile(r"^#include\s+(\S+)\s*$", re.M)
 _SAFE_VALUE = re.compile(r"^[A-Za-z0-9._@:/+=-]*$")
@@ -26,7 +26,7 @@ class TemplateError(Exception):
 
 def bundled_names() -> list[str]:
     folder = resources.files("dofleet").joinpath("data", "templates")
-    return sorted(p.name[:-3] for p in folder.iterdir() if p.name.endswith(".sh"))
+    return sorted(p.name[:-3] for p in folder.iterdir() if p.name.endswith(".sh") and not p.name.startswith("_"))
 
 
 def describe(name: str) -> str:
@@ -58,11 +58,21 @@ def _expand(name: str, seen: set[str]) -> str:
     return _INCLUDE.sub(inline, text)
 
 
-def render(name: str | None, given: dict | None = None) -> tuple[str | None, dict[str, str]]:
-    """Returns (user_data or None, values that were generated and must be shown to the user once)."""
-    if not name:
+def _snippet(name: str) -> str:
+    return resources.files("dofleet").joinpath("data", "templates", f"{name}.sh").read_text(encoding="utf-8")
+
+
+def render(name: str | None, given: dict | None = None, *, mount_volumes: bool = False) -> tuple[str | None, dict[str, str]]:
+    """Returns (user_data or None, values that were generated and must be shown to the user once).
+    mount_volumes runs the volume mount step first, so the template can already use /mnt/<volume>."""
+    if not name and not mount_volumes:
         return None, {}
-    text = _expand(name, set())
+    text = _expand(name, set()) if name else "#!/bin/bash\nset -eux\n"
+    if mount_volumes:
+        head, _, rest = text.partition("\n")
+        if not head.startswith("#!"):
+            raise TemplateError("err.template_shebang", name=name)
+        text = f"{head}\n{_snippet('_volumes')}{rest}"
     values = {**DEFAULT_VARS, **{k: str(v) for k, v in (given or {}).items()}}
     generated: dict[str, str] = {}
     if "${password}" in text and not values.get("password"):

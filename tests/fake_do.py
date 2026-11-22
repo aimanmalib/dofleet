@@ -30,6 +30,8 @@ class FakeDO:
         self.calls: list[tuple[str, str]] = []
         self.fail_next: list[int] = []
         self.next_id = 1000
+        self.delete_errors: dict[int, int] = {}
+        self.vols: dict[str, dict] = {}
         self.page_size = 2  # force pagination in tests
 
     def add(self, name, tags=(), created="2026-01-01T00:00:00Z", size=SIZES[0], status="active", ip="203.0.113.5"):
@@ -61,6 +63,10 @@ class FakeDO:
             return httpx.Response(200, json=self._page(req, "regions", REGIONS))
         if m == "GET" and path == "/account/keys":
             return httpx.Response(200, json=self._page(req, "ssh_keys", self.keys))
+        if m == "POST" and path == "/account/keys":
+            k = {"id": 99, "name": body["name"], "fingerprint": "cc:dd", "public_key": body["public_key"]}
+            self.keys.append(k)
+            return httpx.Response(201, json={"ssh_key": k})
         if m == "GET" and path == "/account":
             return httpx.Response(200, json={"account": {"email": "a@example.com", "status": "active", "droplet_limit": 10}})
         if m == "GET" and path == "/customers/my/balance":
@@ -70,6 +76,21 @@ class FakeDO:
             tag = req.url.params.get("tag_name")
             items = [d for d in self.droplets.values() if not tag or tag in d["tags"]]
             return httpx.Response(200, json=self._page(req, "droplets", items))
+        if m == "GET" and path == "/volumes":
+            return httpx.Response(200, json=self._page(req, "volumes", list(self.vols.values())))
+        if m == "POST" and path == "/volumes":
+            vid = f"vol-{len(self.vols) + 1}"
+            self.vols[vid] = {"id": vid, "name": body["name"], "region": body["region"],
+                              "size_gigabytes": body["size_gigabytes"], "tags": body.get("tags", [])}
+            return httpx.Response(201, json={"volume": self.vols[vid]})
+        if mm := re.fullmatch(r"/volumes/([^/]+)", path):
+            self.vols.pop(mm.group(1), None)
+            return httpx.Response(204)
+        if mm := re.fullmatch(r"/droplets/(\d+)/destroy_with_associated_resources/selective", path):
+            self.droplets.pop(int(mm.group(1)))
+            for v in body.get("volumes", []):
+                self.vols.pop(v, None)
+            return httpx.Response(202)
         if m == "POST" and path == "/droplets":
             self.created_bodies.append(body)
             if (body["region"], body["size"]) in self.sold_out:
@@ -77,9 +98,13 @@ class FakeDO:
                                                  "message": "Size is not available in this region."})
             size = next(s for s in SIZES if s["slug"] == body["size"])
             made = [self.add(n, body.get("tags", []), size=size, status="new", ip=None) for n in body["names"]]
+            for d in made:
+                d["volume_ids"] = list(body.get("volumes", []))
             return httpx.Response(202, json={"droplets": made})
         if mm := re.fullmatch(r"/droplets/(\d+)", path):
             did = int(mm.group(1))
+            if m == "DELETE" and did in self.delete_errors:
+                return httpx.Response(self.delete_errors[did], json={"id": "x", "message": "nope"})
             if did not in self.droplets:
                 return httpx.Response(404, json={"id": "not_found", "message": "not found"})
             if m == "DELETE":

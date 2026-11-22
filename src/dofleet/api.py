@@ -39,7 +39,9 @@ class DOClient:
     def request(self, method: str, path: str, **kw) -> dict[str, Any]:
         for attempt in range(self._retries + 1):
             resp = self._http.request(method, path, **kw)
-            if resp.status_code in RETRY_STATUS and attempt < self._retries:
+            # A POST that got a 5xx may still have created droplets; only 429 (not processed) is safe to resend.
+            retryable = RETRY_STATUS if method.upper() in ("GET", "DELETE") else {429}
+            if resp.status_code in retryable and attempt < self._retries:
                 self._sleep(self._retry_delay(resp, attempt))
                 continue
             break
@@ -86,6 +88,12 @@ class DOClient:
     def ssh_keys(self) -> list[dict]:
         return list(self.paginate("/account/keys", "ssh_keys"))
 
+    def create_ssh_key(self, name: str, public_key: str) -> dict:
+        return self.request("POST", "/account/keys", json={"name": name, "public_key": public_key}).get("ssh_key", {})
+
+    def delete_ssh_key(self, key_id: int) -> None:
+        self.request("DELETE", f"/account/keys/{key_id}")
+
     def droplets(self, tag: str | None = None) -> list[dict]:
         return list(self.paginate("/droplets", "droplets", {"tag_name": tag} if tag else None))
 
@@ -100,6 +108,21 @@ class DOClient:
 
     def delete_droplet(self, droplet_id: int) -> None:
         self.request("DELETE", f"/droplets/{droplet_id}")
+
+    def volumes(self) -> list[dict]:
+        return list(self.paginate("/volumes", "volumes"))
+
+    def create_volume(self, name: str, region: str, size_gb: int, tags: list[str]) -> dict:
+        return self.request("POST", "/volumes", json={"name": name, "region": region, "size_gigabytes": size_gb,
+                                                       "tags": tags, "filesystem_type": "ext4"}).get("volume", {})
+
+    def delete_volume(self, volume_id: str) -> None:
+        self.request("DELETE", f"/volumes/{volume_id}")
+
+    def destroy_with_volumes(self, droplet_id: int, volume_ids: list[str]) -> None:
+        """Delete the droplet and exactly these attached volumes in one call (snapshots/backups untouched)."""
+        self.request("DELETE", f"/droplets/{droplet_id}/destroy_with_associated_resources/selective",
+                     json={"volumes": volume_ids})
 
     def droplet_action(self, droplet_id: int, action: str) -> dict:
         return self.request("POST", f"/droplets/{droplet_id}/actions", json={"type": action}).get("action", {})

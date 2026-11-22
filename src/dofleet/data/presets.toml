@@ -6,9 +6,14 @@ profile = "default"
 lang = "auto"                 # auto | en | ms
 preset = "quick"
 ssh_keys = "all"              # "all" = every key on the account, "none", or a list of key names / fingerprints
+upload_local_key = "yes"      # account has no SSH key: add the first of local_keys to it before creating
+local_keys = ["~/.ssh/id_ed25519.pub", "~/.ssh/id_ecdsa.pub", "~/.ssh/id_rsa.pub"]
+wait_for_setup = true         # after the port answers, wait (over SSH) until cloud-init has finished
+notify_cmd = []               # e.g. ["notify-send", "dofleet"]: message is appended as the last argument after reap deletes
 confirm_over_usd = 50         # ask twice when a batch would cost more than this per month
 max_per_batch = 10            # DigitalOcean accepts at most 10 names in one create call
 ready_timeout = "10m"
+volume_usd_per_gb_month = 0.10   # DigitalOcean block storage list price, used for the cost estimate
 reap_grace = "0m"             # extra time after expiry before `reap` deletes
 
 [profiles.default]
@@ -39,6 +44,15 @@ image = "ubuntu-24-04-x64"
 cloud_init = "docker"
 ttl = "1d"
 monitoring = true
+
+[presets.scratch]
+description = "8 GB RAM box with a 100 GB volume for big temporary jobs (restore tests, data crunching), dies after 6 hours"
+regions = ["sgp1", "fra1"]
+sizes = ["s-4vcpu-8gb", "s-4vcpu-8gb-amd", "s-4vcpu-8gb-intel"]
+image = "ubuntu-24-04-x64"
+cloud_init = "harden"
+ttl = "6h"
+volumes = [100]
 
 [presets.desktop]
 description = "Remote Linux desktop (XFCE over RDP, port 3389), 4 vCPU / 8 GB, dies after 8 hours"

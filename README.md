@@ -62,13 +62,13 @@ or let `dofleet` pick up an existing `doctl auth init` login. `dofleet whoami` s
 | Command | What it does |
 | --- | --- |
 | `dofleet` | Numbered menu (in a terminal) |
-| `dofleet up [preset] -n NAME -c N` | Create droplets. `--ttl 2h`, `--keep` (no timer), `-r sgp1`, `-s s-2vcpu-4gb`, `--var user=dev`, `--dry-run` |
+| `dofleet up [preset] -n NAME -c N` | Create droplets. `--ttl 2h`, `--keep` (no timer), `-r sgp1`, `-s s-2vcpu-4gb`, `--volume 100`, `--var user=dev`, `--dry-run` |
 | `dofleet ls [-m]` | Droplets with IP, age, spend so far, price per month, time left. `-m` = only ones made by dofleet |
 | `dofleet extend NAME --ttl 4h` | Push the timer out. `--keep` removes it |
 | `dofleet reap [--yes] [--dry-run]` | Delete dofleet droplets whose timer ran out |
-| `dofleet down NAME... [--yes]` | Delete by name, id or pattern (`'web-*'`) |
+| `dofleet down NAME... [--yes]` | Delete by name, id or pattern (`'web-*'`), with their dofleet volumes. A pattern only matches droplets dofleet made unless you add `--any` |
 | `dofleet restart NAME... [--hard]` | Reboot, or power cycle with `--hard` |
-| `dofleet ssh NAME` | SSH in as the user the preset created |
+| `dofleet ssh NAME [-- command]` | SSH in as the user the preset created, or run one command |
 | `dofleet cost` | Usage this month, balance, what the running fleet costs per day and month |
 | `dofleet sizes [-r REGION] [-f basic\|premium\|cpu\|memory\|gpu\|all]` | Sizes in stock, cheapest first |
 | `dofleet presets` | Presets and setup templates |
@@ -82,6 +82,8 @@ Add `--json` before any command for machine-readable output, and `--lang ms` or 
 */10 * * * * DIGITALOCEAN_TOKEN=dop_v1_... /home/you/.local/bin/dofleet reap --yes >> ~/.dofleet-reap.log 2>&1
 ```
 
+`reap` also deletes dofleet volumes that have been attached to nothing for over an hour. Set `notify_cmd = ["notify-send", "dofleet"]` (any command; the message is added as the last argument) to hear about what it deleted.
+
 `reap` only touches droplets that carry the `dofleet` tag and an expired `dofleet-exp-<unix time>` tag. Droplets you made by hand or with other tools are never deleted by it.
 
 ## Presets
@@ -93,6 +95,7 @@ Bundled presets (`dofleet presets` lists them):
 | `quick` | s-4vcpu-8gb, then the AMD and Intel twins, Singapore then Bangalore | harden | 8h |
 | `tiny` | the cheapest sizes | harden | 2h |
 | `docker` | s-2vcpu-4gb | docker | 1d |
+| `scratch` | s-4vcpu-8gb + a 100 GB volume | harden | 6h |
 | `desktop` | s-4vcpu-8gb | desktop (XFCE over RDP) | 8h |
 
 Change them or add your own in `~/.config/dofleet/config.toml` (`dofleet init` writes a commented starter):
@@ -125,10 +128,21 @@ Templates are plain shell scripts run once by cloud-init on first boot. `#includ
 
 Your own script works the same way: `cloud_init = "~/scripts/setup.sh"`.
 
+`dofleet up` waits until the port answers and then, over SSH, until cloud-init reports `done`, so "ready" means the setup has finished. A failed setup is shown as `setup failed`.
+
+## Volumes
+
+`volumes = [100, 50]` in a preset, or `--volume 100` on the command line, adds block storage to each droplet. Volumes are formatted ext4 on first boot and mounted under `/mnt/<volume name>` (DigitalOcean shows the name with underscores, e.g. `/mnt/job_01_v1`). They are tagged `dofleet` and deleted together with the droplet by `down` and `reap`; volumes you attached yourself are left alone. The cost estimate includes them.
+
+## SSH keys
+
+If your DigitalOcean account has no SSH key yet, `dofleet` adds your first local public key (`~/.ssh/id_ed25519.pub`, then the ecdsa and rsa keys) to the account before creating, named after the key's hash. Turn that off with `upload_local_key = "no"`. With no key anywhere, DigitalOcean emails a root password; `dofleet` then keeps root and password login on, so you are not locked out.
+
 ## Notes
 
 - The costs shown are estimates from DigitalOcean's listed hourly and monthly prices. Backups, snapshots, volumes and bandwidth overage are not included. `dofleet cost` shows the real month-to-date figure from your account.
-- Without SSH keys on the account, DigitalOcean emails a root password and `dofleet` leaves password login on so you are not locked out.
+- A create request is never retried after a server error, because DigitalOcean may already have made the droplets. Reads and deletes are retried with backoff.
+- Volume deletion finishes on DigitalOcean's side a minute or two after `down` returns.
 - The create call takes at most 10 names, so bigger batches go out in groups of 10.
 
 ## Development

@@ -141,3 +141,23 @@ def test_lang_resolve(monkeypatch):
     assert i18n.resolve() == "en"
     assert i18n.resolve("en") == "en"
     assert i18n.resolve(None, "fr") == "en"
+
+
+def test_cloud_init_state_parsing(monkeypatch):
+    import subprocess
+    from dofleet import ready
+    monkeypatch.setattr(ready.shutil, "which", lambda name: "/usr/bin/ssh")
+    cases = [(0, "status: done\n", "", "done"), (0, "status: running\n", "", "running"),
+             (1, "status: error\n", "", "failed"), (2, "status: degraded done\n", "", "failed"),
+             (255, "", "Permission denied (publickey).", "unknown"), (255, "", "Connection refused", "running")]
+    for rc, out, err, want in cases:
+        monkeypatch.setattr(ready.subprocess, "run",
+                            lambda *a, **k: subprocess.CompletedProcess(a, rc, out, err))
+        assert ready.cloud_init_state("192.0.2.1") == want, (rc, out, err)
+
+
+def test_volume_mount_step_comes_first():
+    text, _ = cloudinit.render("docker", {}, mount_volumes=True)
+    assert text.startswith("#!/bin/bash\n# dofleet: format")
+    assert text.index("scsi-0DO_Volume_") < text.index("docker.io")
+    assert "_volumes" not in cloudinit.bundled_names()

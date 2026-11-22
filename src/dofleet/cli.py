@@ -13,7 +13,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import __version__, cloudinit, config, fleet, ops, placement, ready
+from . import __version__, cloudinit, config, fleet, ops, placement, ready, volumes
 from .api import ApiError, DOClient
 from .i18n import set_lang, t, resolve
 
@@ -50,7 +50,7 @@ def say(text: str) -> None:
 
 
 def money(x: float) -> str:
-    return f"${x:,.2f}"
+    return "<$0.01" if 0 < x < 0.005 else f"${x:,.2f}"
 
 
 def confirm(prompt: str, assume: bool) -> bool:
@@ -95,11 +95,12 @@ def up(preset: Optional[str] = typer.Argument(None),
        image: Optional[str] = typer.Option(None, "--image"),
        tag: list[str] = typer.Option([], "--tag"),
        var: list[str] = typer.Option([], "--var", help="Template value, key=value"),
+       volume: list[int] = typer.Option([], "--volume", help="Add a block storage volume of this many GB (repeatable)"),
        yes: bool = typer.Option(False, "--yes", "-y"),
        dry_run: bool = typer.Option(False, "--dry-run"),
        no_wait: bool = typer.Option(False, "--no-wait")):
     preset = preset or S.settings.defaults.get("preset", "quick")
-    ov = ops.Overrides(region, size, image, "" if keep else ttl, tag, dict(_kv(v) for v in var))
+    ov = ops.Overrides(region, size, image, "" if keep else ttl, tag, dict(_kv(v) for v in var), volume)
     client = S.client()
     with con.status(t("up.planning")):
         plan = ops.plan_up(client, S.settings, preset, name, count, ov)
@@ -123,7 +124,10 @@ def up(preset: Optional[str] = typer.Argument(None),
     port = int(plan.preset.get("ready_port", 22))
     timeout = fleet.parse_duration(plan.preset.get("ready_timeout") or S.settings.defaults.get("ready_timeout", "10m"))
     with con.status(t("up.waiting", port=port)) as st:
-        res = ready.wait_ready(client, ids, port, timeout,
+        ident = ops.local_identity(S.settings)
+        setup = ((lambda ip: ready.cloud_init_state(ip, ident))
+                 if plan.user_data and S.settings.defaults.get("wait_for_setup", True) else None)
+        res = ready.wait_ready(client, ids, port, timeout, setup=setup,
                                on_update=lambda s: st.update(t("up.progress", ready=sum(v == "ready" for v in s.values()),
                                                                 total=len(s), port=port)))
     _finish(plan, res)
@@ -153,9 +157,16 @@ def show_plan(plan: ops.Plan) -> None:
         tb.add_row("", f"[yellow]{t('plan.fallback', want=f'{plan.regions_tried[0]} {plan.sizes_tried[0]}')}[/]")
     tb.add_row(t("plan.names"), ", ".join(plan.names))
     tb.add_row(t("plan.image"), plan.image)
-    tb.add_row(t("plan.keys"), str(len(plan.ssh_key_ids)) if plan.ssh_key_ids else f"[yellow]{t('plan.no_keys')}[/]")
+    if plan.ssh_key_ids:
+        tb.add_row(t("plan.keys"), str(len(plan.ssh_key_ids)))
+    elif plan.upload_key:
+        tb.add_row(t("plan.keys"), t("plan.upload_key", path=plan.upload_key[0]))
+    else:
+        tb.add_row(t("plan.keys"), f"[yellow]{t('plan.no_keys')}[/]")
     tb.add_row(t("plan.timer"), fleet.format_duration(plan.ttl_s) if plan.ttl_s else f"[yellow]{t('plan.no_timer')}[/]")
     tb.add_row(t("plan.setup"), plan.preset.get("cloud_init") or "-")
+    if plan.preset.get("volumes"):
+        tb.add_row(t("plan.volumes"), t("plan.volumes_v", sizes=" + ".join(f"{g} GB" for g in volumes.sizes_gb(plan.preset))))
     if plan.ttl_s:
         tb.add_row(t("plan.cost"), t("plan.cost_ttl", ttl=money(plan.cost_ttl), month=money(plan.cost_month)))
     else:
@@ -176,6 +187,8 @@ def _finish(plan: ops.Plan, res: dict[int, dict]) -> None:
             conn = f"{it['ip']}:{plan.preset['ready_port']}  /  {conn}"
         tb.add_row(it["name"] or str(it["id"]), it["ip"] or "-", t(f"state.{it['state']}"), conn)
     con.print(tb)
+    if any(it["state"] == "setup_failed" for it in items):
+        con.print(f"[red]{t('up.setup_failed', user='root')}[/]")
     if plan.generated.get("password"):
         con.print(f"[bold]{t('up.password', user=user, pw=plan.generated['password'])}[/]")
     if plan.ttl_s:
@@ -204,8 +217,15 @@ def ls(managed: bool = typer.Option(False, "--managed", "-m", help="Only droplet
     con.print(t("ls.total", n=len(data), month=money(total), spent=money(sum(r["spent_usd"] for r in data))))
 
 
-def _pick(patterns: list[str]) -> list[dict]:
+def _pick(patterns: list[str], any_glob: bool = True) -> list[dict]:
     hits = fleet.match(S.client().droplets(), patterns)
+    if not any_glob:  # a pattern like '*' must not sweep up droplets dofleet did not make
+        exact = {str(d["id"]) for d in hits} | {d["name"] for d in hits}
+        named = {p for p in patterns if p in exact}
+        skipped = [d for d in hits if not fleet.is_managed(d) and d["name"] not in named and str(d["id"]) not in named]
+        if skipped:
+            err.print(f"[yellow]{t('down.skipped', names=', '.join(d['name'] for d in skipped))}[/]")
+        hits = [d for d in hits if d not in skipped]
     if not hits:
         err.print(t("err.no_match", p=" ".join(patterns)))
         raise typer.Exit(1)
@@ -213,22 +233,32 @@ def _pick(patterns: list[str]) -> list[dict]:
 
 
 @app.command("down", help="Delete droplets by name, id or glob (web-*)")
-def down(patterns: list[str] = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
-    hits = _pick(patterns)
+def down(patterns: list[str] = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y"),
+         any_droplet: bool = typer.Option(False, "--any", help="Let patterns match droplets dofleet did not create")):
+    hits = _pick(patterns, any_droplet)
     say(t("down.list", names=", ".join(d["name"] for d in hits)))
     if not confirm(t("down.confirm", n=len(hits)), yes):
         raise typer.Exit(1)
+    owned = _owned_volumes(hits)
     for d in hits:
-        S.client().delete_droplet(d["id"])
+        volumes.destroy(S.client(), d, owned)
     if S.as_json:
         out_json({"deleted": [d["id"] for d in hits]})
     else:
         con.print(t("down.done", n=len(hits)))
+        if any(d.get("volume_ids") for d in hits):
+            con.print(t("down.volumes_async"))
 
 
 @app.command("reap", help="Delete dofleet droplets whose timer ran out (safe to run from cron)")
 def reap(yes: bool = typer.Option(False, "--yes", "-y"), dry_run: bool = typer.Option(False, "--dry-run")):
-    victims = ops.reap_list(S.client(), S.settings, time.time())
+    now = time.time()
+    victims = ops.reap_list(S.client(), S.settings, now)
+    orphans = ops.orphan_volumes(S.client(), now)
+    if orphans:
+        say(t("reap.orphans", names=", ".join(v["name"] for v in orphans)))
+        if not dry_run and confirm(t("reap.orphans_confirm", n=len(orphans)), yes):
+            volumes.cleanup(S.client(), [v["id"] for v in orphans])
     if S.as_json and (dry_run or not victims):
         out_json({"expired": [d["id"] for d in victims], "deleted": []})
         return
@@ -238,12 +268,44 @@ def reap(yes: bool = typer.Option(False, "--yes", "-y"), dry_run: bool = typer.O
     say(t("reap.list", names=", ".join(d["name"] for d in victims)))
     if dry_run or not confirm(t("down.confirm", n=len(victims)), yes):
         return
-    for d in victims:
-        S.client().delete_droplet(d["id"])
+    deleted, failed = [], []
+    owned = _owned_volumes(victims)
+    for d in victims:  # one failure must not stop the rest
+        try:
+            volumes.destroy(S.client(), d, owned)
+            deleted.append(d)
+        except ApiError as e:
+            (deleted if e.status == 404 else failed).append(d)  # 404 = someone else already deleted it
+    if deleted:
+        _notify(t("reap.notify", n=len(deleted), names=", ".join(d["name"] for d in deleted)))
     if S.as_json:
-        out_json({"expired": [d["id"] for d in victims], "deleted": [d["id"] for d in victims]})
+        out_json({"expired": [d["id"] for d in victims], "deleted": [d["id"] for d in deleted],
+                  "failed": [d["id"] for d in failed]})
     else:
-        con.print(t("down.done", n=len(victims)))
+        con.print(t("down.done", n=len(deleted)))
+        if failed:
+            err.print(f"[red]{t('reap.failed', names=', '.join(d['name'] for d in failed))}[/]")
+    if failed:
+        raise typer.Exit(1)
+
+
+def _owned_volumes(droplets: list[dict]) -> set[str]:
+    if not any(d.get("volume_ids") for d in droplets):
+        return set()
+    return {v["id"] for v in S.client().volumes() if fleet.MARK_TAG in (v.get("tags") or [])}
+
+
+def _notify(message: str) -> None:
+    cmd = S.settings.defaults.get("notify_cmd") or []
+    if isinstance(cmd, str):
+        cmd = [cmd]
+    if not cmd:
+        return
+    import subprocess
+    try:
+        subprocess.run([*cmd, message], timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        err.print(f"[yellow]{t('warn.notify', err=e)}[/]")
 
 
 @app.command("extend", help="Push the expiry timer out, or remove it with --keep")
@@ -274,7 +336,8 @@ def restart(patterns: list[str] = typer.Argument(...), hard: bool = typer.Option
 
 
 @app.command("ssh", help="SSH into a droplet by name")
-def ssh(target: str, user: Optional[str] = typer.Option(None, "--user", "-u")):
+def ssh(target: str, command: list[str] = typer.Argument(None, help="Optional command to run, after --"),
+        user: Optional[str] = typer.Option(None, "--user", "-u")):
     hits = _pick([target])
     ip = ops.rows(hits[:1], time.time())[0]["ip"]
     if not ip:
@@ -287,7 +350,8 @@ def ssh(target: str, user: Optional[str] = typer.Option(None, "--user", "-u")):
     if not shutil.which("ssh"):
         err.print(t("err.no_ssh"))
         raise typer.Exit(1)
-    os.execvp("ssh", ["ssh", f"{user}@{ip}"])
+    ident = ops.local_identity(S.settings)
+    os.execvp("ssh", ["ssh", "-o", "StrictHostKeyChecking=accept-new", *(["-i", ident] if ident else []), f"{user}@{ip}", *(command or [])])
 
 
 @app.command("cost", help="Balance, this month's usage, and what the running fleet costs")
@@ -302,6 +366,8 @@ def cost():
     tb.add_row(t("cost.fleet"), t("cost.fleet_v", n=c["droplets"], month=money(c["fleet_monthly"]),
                                   day=money(c["fleet_hourly"] * 24)))
     con.print(tb)
+    if c["orphan_volumes"]:
+        con.print(f"[yellow]{t('cost.orphans', n=len(c['orphan_volumes']), gb=c['orphan_volume_gb'], names=', '.join(c['orphan_volumes']))}[/]")
     if c["without_timer"]:
         con.print(f"[yellow]{t('cost.no_timer', n=c['without_timer'])}[/]")
 

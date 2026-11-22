@@ -1,7 +1,7 @@
 #!/bin/bash
 # dofleet template: harden
 # Sudo user with your SSH keys, firewall, fail2ban, automatic security updates.
-# Vars: user, password_auth (yes|no)
+# Vars: user, password_auth (yes|no), root_login (prohibit-password|yes)
 set -eux
 export DEBIAN_FRONTEND=noninteractive
 id -u ${user} >/dev/null 2>&1 || adduser --disabled-password --gecos "" ${user}
@@ -15,7 +15,7 @@ fi
 mkdir -p /etc/ssh/sshd_config.d
 cat > /etc/ssh/sshd_config.d/10-dofleet.conf <<CONF
 PasswordAuthentication ${password_auth}
-PermitRootLogin prohibit-password
+PermitRootLogin ${root_login}
 CONF
 systemctl reload ssh || systemctl reload sshd || true
 apt-get update -q

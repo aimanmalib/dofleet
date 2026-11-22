@@ -59,6 +59,14 @@ Jalankan `reap` dari cron setiap 10 minit:
 
 Ubah pratetap atau tambah sendiri dalam `~/.config/dofleet/config.toml` (`dofleet init` menulis fail permulaan berkomen). Templat persediaan ialah skrip shell biasa: `harden` (pengguna sudo, firewall, fail2ban, kemas kini keselamatan automatik), `docker`, dan `desktop` (desktop XFCE melalui RDP; kata laluan dijana dan dipapar sekali).
 
+## Keselamatan dan volume
+
+- Akaun tanpa kunci SSH: `dofleet` menambah kunci awam tempatan anda (`~/.ssh/id_ed25519.pub` dahulu). Tiada kunci langsung: DigitalOcean e-mel kata laluan root, dan `dofleet` kekalkan log masuk root + kata laluan supaya anda tidak terkunci.
+- "Sedia" bermaksud cloud-init sudah `done` (disemak melalui SSH), bukan hanya port terbuka.
+- `volumes = [100]` atau `--volume 100`: volume diformat ext4, dipasang di `/mnt/<nama volume>`, dan dipadam bersama droplet oleh `down` dan `reap`. Volume yang anda pasang sendiri tidak disentuh.
+- Corak dalam `down` (`'web-*'`) hanya padan droplet buatan dofleet, kecuali dengan `--any`.
+- `notify_cmd` dalam config: arahan yang dijalankan selepas `reap` memadam sesuatu.
+
 ## Lesen
 
 MIT
