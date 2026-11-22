@@ -1,12 +1,12 @@
 [build-system]
-requires = ["hatchling>=1.24"]
+requires = ["hatchling>=1.24", "hatch-fancy-pypi-readme>=24.1"]
 build-backend = "hatchling.build"
 
 [project]
 name = "dofleet"
 version = "0.1.0"
-description = "Disposable DigitalOcean droplets with a cost guard: presets, sold-out fallback, expiry timers and an auto-reaper."
-readme = "README.md"
+description = "Disposable DigitalOcean droplets that delete themselves: expiry timers, a month budget, one-command jobs and an MCP server for AI agents."
+dynamic = ["readme"]
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Aiman Malib" }]
@@ -34,3 +34,14 @@ packages = ["src/dofleet"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# README images are relative (they work in private and public GitHub repos); PyPI needs absolute URLs.
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '(src|srcset)="assets/'
+replacement = '\1="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/'

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/banner-dark.svg">
-    <img alt="dofleet: disposable droplets that clean up after themselves" src="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/banner-light.svg" width="560">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+    <img alt="dofleet: disposable droplets that clean up after themselves" src="assets/banner-light.svg" width="560">
   </picture>
 </p>
 
@@ -25,7 +25,7 @@
 
 Every droplet `dofleet` creates carries an expiry timer, and a reaper deletes it when the timer runs out, whether or not you remember. You see what a batch costs before you confirm, a month budget stops you before you pass it, and a sold-out size falls back to the next one in your preset instead of failing.
 
-<p align="center"><img alt="dofleet run: boot, copy, run, copy back, delete, in one command" src="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/demo.gif" width="760"></p>
+<p align="center"><img alt="dofleet run: boot, copy, run, copy back, delete, in one command" src="assets/demo.gif" width="760"></p>
 
 <sub>Recorded on a real account; waiting time is shortened. The droplet existed for 2 minutes and cost under a cent.</sub>
 
