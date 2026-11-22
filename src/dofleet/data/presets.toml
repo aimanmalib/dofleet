@@ -1,0 +1,51 @@
+# Bundled defaults. Do not edit this copy: run `dofleet init` and change ~/.config/dofleet/config.toml instead.
+# Any key you set there overrides the same key here; presets with the same name are merged key by key.
+
+[defaults]
+profile = "default"
+lang = "auto"                 # auto | en | ms
+preset = "quick"
+ssh_keys = "all"              # "all" = every key on the account, "none", or a list of key names / fingerprints
+confirm_over_usd = 50         # ask twice when a batch would cost more than this per month
+max_per_batch = 10            # DigitalOcean accepts at most 10 names in one create call
+ready_timeout = "10m"
+reap_grace = "0m"             # extra time after expiry before `reap` deletes
+
+[profiles.default]
+token_env = "DIGITALOCEAN_TOKEN"
+
+[presets.quick]
+description = "4 vCPU / 8 GB Ubuntu box in Singapore, hardened, dies after 8 hours"
+regions = ["sgp1", "blr1"]
+sizes = ["s-4vcpu-8gb", "s-4vcpu-8gb-amd", "s-4vcpu-8gb-intel"]
+image = "ubuntu-24-04-x64"
+cloud_init = "harden"
+ttl = "8h"
+monitoring = true
+
+[presets.tiny]
+description = "Cheapest box for a quick test, dies after 2 hours"
+regions = ["sgp1", "blr1", "fra1"]
+sizes = ["s-1vcpu-512mb-10gb", "s-1vcpu-1gb"]
+image = "ubuntu-24-04-x64"
+cloud_init = "harden"
+ttl = "2h"
+
+[presets.docker]
+description = "Docker host, 2 vCPU / 4 GB, dies after 1 day"
+regions = ["sgp1", "blr1"]
+sizes = ["s-2vcpu-4gb", "s-2vcpu-4gb-amd"]
+image = "ubuntu-24-04-x64"
+cloud_init = "docker"
+ttl = "1d"
+monitoring = true
+
+[presets.desktop]
+description = "Remote Linux desktop (XFCE over RDP, port 3389), 4 vCPU / 8 GB, dies after 8 hours"
+regions = ["sgp1", "blr1"]
+sizes = ["s-4vcpu-8gb", "s-4vcpu-8gb-amd"]
+image = "ubuntu-24-04-x64"
+cloud_init = "desktop"
+ttl = "8h"
+ready_port = 3389
+ready_timeout = "20m"
