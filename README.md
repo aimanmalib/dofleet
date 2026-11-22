@@ -6,6 +6,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/aimanmalib/dofleet/actions/workflows/ci.yml"><img alt="tests" src="https://github.com/aimanmalib/dofleet/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-0E2A3D">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0E2A3D">
   <img alt="Tested on a live DigitalOcean account" src="https://img.shields.io/badge/tested%20on-a%20live%20DigitalOcean%20account-0F9F8F">
@@ -230,4 +231,4 @@ The tests run against an in-memory fake of the DigitalOcean API and never touch 
 
 ## License
 
-MIT
+MIT. Made by [Aiman Malib](https://github.com/aimanmalib) at [Sasa Teguh](https://sasateguh.com).
