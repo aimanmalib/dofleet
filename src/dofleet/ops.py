@@ -7,7 +7,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
-from . import cloudinit, fleet, placement, volumes
+from . import bake, budget, cloudinit, fleet, placement, volumes
 from .api import ApiError, DOClient, public_ipv4
 from .config import ConfigError, Settings
 
@@ -23,6 +23,7 @@ class Overrides:
     tags: list[str] = field(default_factory=list)
     vars: dict[str, str] = field(default_factory=dict)
     volumes: list[int] = field(default_factory=list)
+    baked: bool = False
 
 
 @dataclass
@@ -43,6 +44,7 @@ class Plan:
     regions_tried: list[str]
     sizes_tried: list[str]
     upload_key: tuple[str, str] | None = None   # (local .pub path, public key) to add to the account first
+    budget_left: float | None = None
 
 
 def resolve_ssh_keys(client: DOClient, wanted) -> list[int]:
@@ -101,8 +103,14 @@ def plan_up(client: DOClient, settings: Settings, preset_name: str, prefix: str 
     all_sizes, all_regions = client.sizes(), client.regions()
     choice = placement.choose(regions, sizes, all_sizes, all_regions)
     if choice is None:
+        known = {x["slug"] for x in all_sizes}
+        if not any(x in known for x in sizes):
+            raise ConfigError("err.size_unknown", sizes=", ".join(sizes))
         raise ConfigError("err.sold_out", regions=", ".join(regions), sizes=", ".join(sizes))
     wanted_keys = settings.defaults.get("ssh_keys", "all")
+    prefixes = tuple(settings.defaults.get("require_ttl_for") or [])
+    if ttl_s is None and prefixes and choice.size["slug"].startswith(prefixes):
+        raise ConfigError("err.ttl_required", size=choice.size["slug"])
     key_ids = resolve_ssh_keys(client, wanted_keys)
     upload = local_public_key(settings) if not key_ids and wanted_keys == "all" else None
     has_key = bool(key_ids or upload)
@@ -110,6 +118,10 @@ def plan_up(client: DOClient, settings: Settings, preset_name: str, prefix: str 
     # Without any key DigitalOcean emails a root password: keep password + root login on, or the box is unreachable.
     tmpl_vars.setdefault("password_auth", "no" if has_key else "yes")
     tmpl_vars.setdefault("root_login", "prohibit-password" if has_key else "yes")
+    image = ov.image or preset["image"]
+    if ov.baked:
+        image = bake.latest_image(client, preset["name"], choice.region)
+        preset = {**preset, "cloud_init": None}  # the snapshot already ran the setup
     user_data, generated = cloudinit.render(preset.get("cloud_init"), tmpl_vars,
                                             mount_volumes=bool(preset.get("volumes")))
     taken = {d["name"] for d in client.droplets()}
@@ -120,18 +132,38 @@ def plan_up(client: DOClient, settings: Settings, preset_name: str, prefix: str 
     vol_month = volumes.monthly_cost(preset, float(settings.defaults.get("volume_usd_per_gb_month", 0.10)))
     hourly, monthly = hourly + vol_month / fleet.HOURS_PER_MONTH, monthly + vol_month
     cost_ttl, cost_month = fleet.batch_cost(hourly, monthly, count, ttl_s)
-    return Plan(preset, choice.region, choice.size, choice.fell_back, names, ov.image or preset["image"], key_ids,
-                ttl_s, tags, user_data, generated, cost_ttl, cost_month, regions, sizes, upload)
+    st = budget.status(client, settings)
+    budget.check_new(st, cost_ttl)
+    return Plan(preset, choice.region, choice.size, choice.fell_back, names, image, key_ids,
+                ttl_s, tags, user_data, generated, cost_ttl, cost_month, regions, sizes, upload,
+                st.left if st.on else None)
+
+
+def key_fingerprint(public_key: str) -> str:
+    """MD5 fingerprint in DigitalOcean's aa:bb:.. form."""
+    import base64
+    raw = base64.b64decode(public_key.split()[1])
+    digest = hashlib.md5(raw, usedforsecurity=False).hexdigest()
+    return ":".join(digest[i:i + 2] for i in range(0, 32, 2))
 
 
 def ensure_key(client: DOClient, public_key: str) -> int:
+    """Id of this public key on the account, adding it when missing. Looks the key up by fingerprint, because the
+    key list lags behind right after an upload (measured: a second run seconds later got 422 'already in use')."""
+    fp = key_fingerprint(public_key)
+    try:
+        return client.request("GET", f"/account/keys/{fp}")["ssh_key"]["id"]
+    except ApiError as e:
+        if e.status != 404:
+            raise
     body = " ".join(public_key.split()[:2])
-    for k in client.ssh_keys():
-        if " ".join((k.get("public_key") or "").split()[:2]) == body:
-            return k["id"]
-    # Named after the key itself, not the machine: a hostname can carry an IP or a client name.
     name = f"dofleet-{hashlib.sha256(body.encode()).hexdigest()[:10]}"
-    return client.create_ssh_key(name, public_key)["id"]
+    try:
+        return client.create_ssh_key(name, public_key)["id"]
+    except ApiError as e:
+        if e.status != 422:
+            raise
+        return client.request("GET", f"/account/keys/{fp}")["ssh_key"]["id"]
 
 
 def _sold_out(err: ApiError) -> bool:
@@ -201,12 +233,13 @@ def reap_list(client: DOClient, settings: Settings, now: float) -> list[dict]:
     return [d for d in fleet.expired(client.droplets(fleet.MARK_TAG), now - grace) if fleet.is_managed(d)]
 
 
-def set_expiry(client: DOClient, droplet: dict, ttl_s: int | None, now: float) -> int | None:
-    """ttl_s=None removes the timer. Otherwise the new expiry = later of (now, current expiry) + ttl."""
+def set_expiry(client: DOClient, droplet: dict, ttl_s: int | None, now: float, from_now: bool = False) -> int | None:
+    """ttl_s=None removes the timer. Otherwise the new expiry = later of (now, current expiry) + ttl,
+    or now + ttl with from_now (used where the total lifetime must stay capped)."""
     old = [t for t in droplet.get("tags", []) if t.startswith(fleet.EXP_PREFIX)]
     new_exp = None
     if ttl_s is not None:
-        base = max(now, fleet.expires_at(droplet) or now)
+        base = now if from_now else max(now, fleet.expires_at(droplet) or now)
         new_exp = int(base + ttl_s)
         client.tag_resource(f"{fleet.EXP_PREFIX}{new_exp}", droplet["id"])
         client.tag_resource(fleet.MARK_TAG, droplet["id"])

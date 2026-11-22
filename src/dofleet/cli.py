@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import json
-import os
-import shutil
 import sys
 import time
 from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
-from . import __version__, cloudinit, config, fleet, ops, placement, ready, volumes
+from . import __version__, budget, cloudinit, config, fleet, launch, ops, volumes
 from .api import ApiError, DOClient
 from .i18n import set_lang, t, resolve
 
@@ -97,10 +96,11 @@ def up(preset: Optional[str] = typer.Argument(None),
        var: list[str] = typer.Option([], "--var", help="Template value, key=value"),
        volume: list[int] = typer.Option([], "--volume", help="Add a block storage volume of this many GB (repeatable)"),
        yes: bool = typer.Option(False, "--yes", "-y"),
+       baked: bool = typer.Option(False, "--baked", help="Boot from the newest `dofleet bake` snapshot of this preset"),
        dry_run: bool = typer.Option(False, "--dry-run"),
        no_wait: bool = typer.Option(False, "--no-wait")):
     preset = preset or S.settings.defaults.get("preset", "quick")
-    ov = ops.Overrides(region, size, image, "" if keep else ttl, tag, dict(_kv(v) for v in var), volume)
+    ov = ops.Overrides(region, size, image, "" if keep else ttl, tag, dict(_kv(v) for v in var), volume, baked)
     client = S.client()
     with con.status(t("up.planning")):
         plan = ops.plan_up(client, S.settings, preset, name, count, ov)
@@ -116,20 +116,10 @@ def up(preset: Optional[str] = typer.Argument(None),
         typed = typer.prompt(t("up.big_confirm", total=money(plan.cost_month), limit=money(limit)), default="")
         if typed.strip() != str(len(plan.names)):
             raise typer.Exit(1)
-    created = ops.execute_up(client, S.settings, plan)
-    ids = [d["id"] for d in created]
-    if no_wait:
-        _finish(plan, {i: {"droplet": d, "ip": None, "state": "new"} for i, d in zip(ids, created)})
-        return
     port = int(plan.preset.get("ready_port", 22))
-    timeout = fleet.parse_duration(plan.preset.get("ready_timeout") or S.settings.defaults.get("ready_timeout", "10m"))
     with con.status(t("up.waiting", port=port)) as st:
-        ident = ops.local_identity(S.settings)
-        setup = ((lambda ip: ready.cloud_init_state(ip, ident))
-                 if plan.user_data and S.settings.defaults.get("wait_for_setup", True) else None)
-        res = ready.wait_ready(client, ids, port, timeout, setup=setup,
-                               on_update=lambda s: st.update(t("up.progress", ready=sum(v == "ready" for v in s.values()),
-                                                                total=len(s), port=port)))
+        res = launch.create_and_wait(client, S.settings, plan, wait=not no_wait, on_update=lambda s: st.update(
+            t("up.progress", ready=sum(v == "ready" for v in s.values()), total=len(s), port=port)))
     _finish(plan, res)
 
 
@@ -171,6 +161,8 @@ def show_plan(plan: ops.Plan) -> None:
         tb.add_row(t("plan.cost"), t("plan.cost_ttl", ttl=money(plan.cost_ttl), month=money(plan.cost_month)))
     else:
         tb.add_row(t("plan.cost"), t("plan.cost_month", month=money(plan.cost_month)))
+    if plan.budget_left is not None:
+        tb.add_row(t("plan.budget"), t("plan.budget_v", left=money(plan.budget_left)))
     con.print(tb)
 
 
@@ -254,6 +246,12 @@ def down(patterns: list[str] = typer.Argument(...), yes: bool = typer.Option(Fal
 def reap(yes: bool = typer.Option(False, "--yes", "-y"), dry_run: bool = typer.Option(False, "--dry-run")):
     now = time.time()
     victims = ops.reap_list(S.client(), S.settings, now)
+    st = budget.status(S.client(), S.settings)
+    if st.over:
+        err.print(f"[red]{t('reap.over_budget', used=money(st.used), budget=money(st.budget))}[/]")
+        if budget.action(S.settings) == "reap":
+            seen = {d["id"] for d in victims}
+            victims += [d for d in S.client().droplets(fleet.MARK_TAG) if d["id"] not in seen and fleet.is_managed(d)]
     orphans = ops.orphan_volumes(S.client(), now)
     if orphans:
         say(t("reap.orphans", names=", ".join(v["name"] for v in orphans)))
@@ -324,109 +322,24 @@ def extend(patterns: list[str] = typer.Argument(...), ttl: str = typer.Option("2
         out_json(done)
 
 
-@app.command("restart", help="Reboot droplets (--hard = power cycle)")
-def restart(patterns: list[str] = typer.Argument(...), hard: bool = typer.Option(False, "--hard"),
-            yes: bool = typer.Option(False, "--yes", "-y")):
-    hits = _pick(patterns)
-    if not confirm(t("restart.confirm", names=", ".join(d["name"] for d in hits)), yes):
-        raise typer.Exit(1)
-    for d in hits:
-        S.client().droplet_action(d["id"], "power_cycle" if hard else "reboot")
-    say(t("restart.done", n=len(hits)))
-
-
-@app.command("ssh", help="SSH into a droplet by name")
-def ssh(target: str, command: list[str] = typer.Argument(None, help="Optional command to run, after --"),
-        user: Optional[str] = typer.Option(None, "--user", "-u")):
-    hits = _pick([target])
-    ip = ops.rows(hits[:1], time.time())[0]["ip"]
-    if not ip:
-        err.print(t("err.no_ip"))
-        raise typer.Exit(1)
-    if user is None:
-        preset_tag = next((x for x in hits[0].get("tags", []) if x.startswith(fleet.PRESET_PREFIX)), "")
-        p = S.settings.presets.get(preset_tag[len(fleet.PRESET_PREFIX):], {})
-        user = (p.get("vars") or {}).get("user", cloudinit.DEFAULT_VARS["user"]) if p.get("cloud_init") else "root"
-    if not shutil.which("ssh"):
-        err.print(t("err.no_ssh"))
-        raise typer.Exit(1)
-    ident = ops.local_identity(S.settings)
-    os.execvp("ssh", ["ssh", "-o", "StrictHostKeyChecking=accept-new", *(["-i", ident] if ident else []), f"{user}@{ip}", *(command or [])])
-
-
-@app.command("cost", help="Balance, this month's usage, and what the running fleet costs")
-def cost():
-    c = ops.cost_summary(S.client(), time.time())
-    if S.as_json:
-        out_json(c)
-        return
-    tb = Table(show_header=False, box=None)
-    tb.add_row(t("cost.mtd"), money(c["month_to_date_usage"]))
-    tb.add_row(t("cost.balance"), money(c["month_to_date_balance"]))
-    tb.add_row(t("cost.fleet"), t("cost.fleet_v", n=c["droplets"], month=money(c["fleet_monthly"]),
-                                  day=money(c["fleet_hourly"] * 24)))
-    con.print(tb)
-    if c["orphan_volumes"]:
-        con.print(f"[yellow]{t('cost.orphans', n=len(c['orphan_volumes']), gb=c['orphan_volume_gb'], names=', '.join(c['orphan_volumes']))}[/]")
-    if c["without_timer"]:
-        con.print(f"[yellow]{t('cost.no_timer', n=c['without_timer'])}[/]")
-
-
-@app.command("sizes", help="Sizes in stock, cheapest first")
-def sizes(region: Optional[str] = typer.Option(None, "--region", "-r"),
-          family: str = typer.Option("basic", "--family", "-f", help="basic | premium | cpu | memory | gpu | all")):
-    data = placement.filter_sizes(S.client().sizes(), region, family)
-    if S.as_json:
-        out_json(data)
-        return
-    tb = Table("#", "slug", "vCPU", "RAM", "disk", t("col.monthly"), t("col.hourly"))
-    for i, s in enumerate(data, 1):
-        tb.add_row(str(i), s["slug"], str(s.get("vcpus")), fleet.mem_text(s.get('memory')),
-                   f"{s.get('disk')} GB", money(float(s.get("price_monthly") or 0)), f"${float(s.get('price_hourly') or 0):.4f}")
-    con.print(tb)
-
-
-@app.command("presets", help="Presets and setup templates you can use")
-def presets():
-    if S.as_json:
-        out_json({"presets": S.settings.presets, "templates": cloudinit.bundled_names()})
-        return
-    tb = Table(t("col.preset"), t("col.desc"), t("col.size"), t("col.timer"))
-    for name, p in sorted(S.settings.presets.items()):
-        tb.add_row(name, p.get("description", ""), " > ".join(p.get("sizes", [])), p.get("ttl") or "-")
-    con.print(tb)
-    for name in cloudinit.bundled_names():
-        con.print(f"  [bold]{name}[/]  {cloudinit.describe(name)}")
-    con.print(t("presets.where", path=S.settings.path))
-
-
-@app.command("init", help="Write a starter config.toml")
-def init():
-    path = config.write_starter()
-    con.print(t("init.done", path=path))
-
-
-@app.command("whoami", help="Which account and token this profile uses")
-def whoami():
-    _, source = S.settings.token(S.profile)
-    acc = S.client().account()
-    data = {"email": acc.get("email"), "status": acc.get("status"), "droplet_limit": acc.get("droplet_limit"),
-            "token_from": source}
-    if S.as_json:
-        out_json(data)
-    else:
-        con.print(t("whoami", **data))
+def runjob_error():
+    from .runjob import JobError
+    return JobError
 
 
 def main() -> None:
+    from . import cli_info, cli_jobs  # noqa: F401  registers the remaining commands
     try:
         app()
-    except (config.ConfigError, cloudinit.TemplateError) as e:
+    except runjob_error() as e:
         err.print(f"[red]{t(e.key, **e.kw)}[/]")
+        sys.exit(1)
+    except (config.ConfigError, cloudinit.TemplateError) as e:
+        err.print(f"[red]{escape(t(e.key, **e.kw))}[/]")
         sys.exit(1)
     except ApiError as e:
         key = {401: "err.api_401", 403: "err.api_403", 429: "err.api_429"}.get(e.status, "err.api")
-        err.print(f"[red]{t(key, status=e.status, msg=e.message)}[/]")
+        err.print(f"[red]{escape(t(key, status=e.status, msg=e.message))}[/]")
         sys.exit(1)
     except fleet.DurationError as e:
         err.print(f"[red]{t('err.duration', text=e)}[/]")

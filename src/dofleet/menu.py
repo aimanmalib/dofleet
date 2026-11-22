@@ -26,14 +26,15 @@ def run_menu(cli) -> None:
 
 
 def _run(cli, choice: str) -> None:
+    from . import cli_info as info
     if choice == "1":
-        cli.presets()
+        info.presets()
         preset = typer.prompt(t("menu.which_preset"), default=cli.S.settings.defaults.get("preset", "quick"))
         name = typer.prompt(t("menu.name"), default=preset)
         count = typer.prompt(t("menu.count"), default=1, type=int)
         ttl = typer.prompt(t("menu.ttl"), default=cli.S.settings.presets.get(preset, {}).get("ttl") or "")
         cli.up(preset=preset, name=name, count=count, ttl=ttl, keep=not ttl, region=[], size=[], image=None,
-               tag=[], var=[], volume=[], yes=False, dry_run=False, no_wait=False)
+               tag=[], var=[], volume=[], baked=False, yes=False, dry_run=False, no_wait=False)
     elif choice == "2":
         cli.ls(managed=False)
     elif choice == "3":
@@ -46,6 +47,6 @@ def _run(cli, choice: str) -> None:
     elif choice == "5":
         cli.reap(yes=False, dry_run=False)
     elif choice == "6":
-        cli.cost()
+        info.cost()
     elif choice == "7":
-        cli.sizes(region=typer.prompt(t("menu.region"), default="sgp1"), family="basic")
+        info.sizes(region=typer.prompt(t("menu.region"), default="sgp1"), family="basic")

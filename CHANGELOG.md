@@ -12,5 +12,12 @@ First version. Rewritten from scratch; it shares no code with the private script
 - Block storage volumes (`volumes` / `--volume`): mounted on boot, deleted with the droplet, orphans reaped
 - Accounts without an SSH key: local public key uploaded; with no key at all, root password login stays on
 - "Ready" waits for cloud-init to finish (over SSH); setup failures are reported
+- `run`: one job on a fresh droplet (copy up, run, copy back, delete), exit code passed through
+- Month budget (`budget_usd`, `budget_action`): blocks creates, reaper can stop the fleet; GPU sizes need a timer
+- `install-reaper`: the reaper as a scheduled DigitalOcean Function (no local cron needed)
+- `mcp`: MCP server so AI agents can borrow droplets under a policy, without the token
+- `bake` / `up --baked` / `snapshots`: boot from a finished setup in about 40 s
+- GitHub Action (`action.yml`) for CI jobs and pull request previews
+- `gpu` preset; per-droplet known_hosts (DigitalOcean reuses IPs); SSH key looked up by fingerprint
 - Safety: glob patterns in `down` skip droplets dofleet did not make (`--any` to include); create is never retried after 5xx;
   `reap` keeps going when one delete fails and treats 404 as done; `notify_cmd` hook

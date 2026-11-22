@@ -4,7 +4,7 @@ import time
 import pytest
 from typer.testing import CliRunner
 
-from dofleet import cli, fleet, ops, ready
+from dofleet import cli, cli_info, cli_jobs, fleet, ops, ready  # noqa: F401
 from dofleet.api import ApiError, DOClient
 from fake_do import FakeDO
 
@@ -19,7 +19,7 @@ def fake(monkeypatch, tmp_path):
     monkeypatch.setenv("DIGITALOCEAN_TOKEN", "t")
     cli.S._client = DOClient("t", transport=fd.transport(), sleep=lambda s: None)
     monkeypatch.setattr(ready, "port_open", lambda ip, port, timeout=5.0: True)
-    monkeypatch.setattr(ready, "cloud_init_state", lambda ip, identity=None: "done")
+    monkeypatch.setattr(ready, "cloud_init_state", lambda ip, identity=None, droplet_id=None: "done")
     monkeypatch.setenv("HOME", str(tmp_path))  # no real ~/.ssh keys leak into tests
     monkeypatch.setattr(ready.time, "sleep", lambda s: None)
     yield fd
@@ -70,13 +70,16 @@ def test_up_without_any_key_keeps_root_password_login(fake):
 def test_up_uploads_local_key_when_account_has_none(fake, tmp_path):
     fake.keys = []
     (tmp_path / ".ssh").mkdir()
-    (tmp_path / ".ssh" / "id_ed25519.pub").write_text("ssh-ed25519 AAAAC3Nza test@host\n")
+    (tmp_path / ".ssh" / "id_ed25519.pub").write_text("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@host\n")
     r = run("--json", "up", "tiny", "--yes", "--no-wait")
     assert r.exit_code == 0, r.output
     body = fake.created_bodies[0]
     assert body["ssh_keys"] == [99] and "PermitRootLogin prohibit-password" in body["user_data"]
     run("--json", "up", "tiny", "--yes", "--no-wait")  # second run reuses the uploaded key
     assert [c for c in fake.calls if c == ("POST", "/account/keys")] == [("POST", "/account/keys")]
+    fake.keys[0]["public_key"] = ""  # list lags behind: lookup by fingerprint still finds it
+    run("--json", "up", "tiny", "--yes", "--no-wait")
+    assert fake.created_bodies[-1]["ssh_keys"] == [99]
 
 
 def test_create_is_not_retried_on_5xx(fake):
@@ -185,8 +188,9 @@ def test_wait_ready_waits_for_setup():
     states = {d1["id"]: iter(["running", "done"]), d2["id"]: iter(["failed"])}
     ip_to_id = {}
 
-    def setup(ip):
-        return next(states[ip_to_id[ip]])
+    def setup(ip, did):
+        assert ip_to_id[ip] == did
+        return next(states[did])
     orig = c.droplet
 
     def droplet(i):
@@ -228,7 +232,7 @@ def test_menu_dispatches_to_commands(fake, monkeypatch, capsys):
     fake.add("box", tags=["dofleet", "dofleet-exp-1"])
     cli.S.settings = cli.config.load()
     cli.S.as_json = False
-    answers = iter(["2", "5", "8"])
+    answers = iter(["2", "6", "7", "sgp1", "5", "8"])
     monkeypatch.setattr(menu.typer, "prompt", lambda *a, **k: next(answers))
     monkeypatch.setattr(cli, "confirm", lambda prompt, assume: True)
     menu.run_menu(cli)

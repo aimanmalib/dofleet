@@ -1,0 +1,68 @@
+name: dofleet
+description: Short-lived DigitalOcean droplets for CI jobs and pull request previews, with an expiry timer and cost guard.
+author: Aiman Malib
+branding:
+  icon: clock
+  color: blue
+inputs:
+  token:
+    description: DigitalOcean API token (store it as a repository secret)
+    required: true
+  command:
+    description: "up (create and wait), down (delete by name), run (one job on a fresh droplet), reap"
+    required: false
+    default: up
+  preset:
+    description: Preset name (bundled or from the config file)
+    required: false
+    default: tiny
+  name:
+    description: Droplet name. For pull request previews use something like pr-${{ github.event.number }}
+    required: false
+    default: ci-${{ github.run_id }}
+  ttl:
+    description: Expiry timer, e.g. 2h. The reaper deletes the droplet after this even if the workflow never cleans up
+    required: false
+    default: 2h
+  args:
+    description: Extra arguments for the command (for run, the command after --)
+    required: false
+    default: ""
+  config:
+    description: Optional dofleet config.toml contents (presets, budget)
+    required: false
+    default: ""
+  version:
+    description: dofleet version or git ref to install
+    required: false
+    default: ""
+outputs:
+  ip:
+    description: Public IPv4 of the first droplet (command up)
+    value: ${{ steps.dofleet.outputs.ip }}
+  name:
+    description: Name of the first droplet (command up)
+    value: ${{ steps.dofleet.outputs.name }}
+  json:
+    description: Full JSON output of the command
+    value: ${{ steps.dofleet.outputs.json }}
+runs:
+  using: composite
+  steps:
+    - name: Install dofleet
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.version }}" ]; then pip install --quiet "dofleet==${{ inputs.version }}" || pip install --quiet "git+https://github.com/aimanmalib/dofleet@${{ inputs.version }}"
+        else pip install --quiet "${{ github.action_path }}"; fi
+    - name: Run dofleet
+      id: dofleet
+      shell: bash
+      env:
+        DIGITALOCEAN_TOKEN: ${{ inputs.token }}
+        DOFLEET_CMD: ${{ inputs.command }}
+        DOFLEET_PRESET: ${{ inputs.preset }}
+        DOFLEET_NAME: ${{ inputs.name }}
+        DOFLEET_TTL: ${{ inputs.ttl }}
+        DOFLEET_ARGS: ${{ inputs.args }}
+        DOFLEET_CONFIG_TEXT: ${{ inputs.config }}
+      run: bash "${{ github.action_path }}/scripts/action.sh"

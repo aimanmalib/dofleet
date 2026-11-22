@@ -32,6 +32,10 @@ class FakeDO:
         self.next_id = 1000
         self.delete_errors: dict[int, int] = {}
         self.vols: dict[str, dict] = {}
+        self.usage = "12.50"
+        self.snaps: list[dict] = []
+        self.namespaces: list[dict] = []
+        self.triggers: list[dict] = []
         self.page_size = 2  # force pagination in tests
 
     def add(self, name, tags=(), created="2026-01-01T00:00:00Z", size=SIZES[0], status="active", ip="203.0.113.5"):
@@ -63,15 +67,41 @@ class FakeDO:
             return httpx.Response(200, json=self._page(req, "regions", REGIONS))
         if m == "GET" and path == "/account/keys":
             return httpx.Response(200, json=self._page(req, "ssh_keys", self.keys))
+        if m == "GET" and (mm := re.fullmatch(r"/account/keys/([0-9a-f:]+)", path)):
+            hit = [k for k in self.keys if k["fingerprint"] == mm.group(1)]
+            return httpx.Response(200, json={"ssh_key": hit[0]}) if hit else httpx.Response(404, json={"message": "nf"})
         if m == "POST" and path == "/account/keys":
-            k = {"id": 99, "name": body["name"], "fingerprint": "cc:dd", "public_key": body["public_key"]}
+            from dofleet.ops import key_fingerprint
+            k = {"id": 99, "name": body["name"], "fingerprint": key_fingerprint(body["public_key"]),
+                 "public_key": body["public_key"]}
             self.keys.append(k)
             return httpx.Response(201, json={"ssh_key": k})
         if m == "GET" and path == "/account":
             return httpx.Response(200, json={"account": {"email": "a@example.com", "status": "active", "droplet_limit": 10}})
         if m == "GET" and path == "/customers/my/balance":
-            return httpx.Response(200, json={"month_to_date_balance": "12.50", "account_balance": "0.00",
-                                             "month_to_date_usage": "12.50"})
+            return httpx.Response(200, json={"month_to_date_balance": self.usage, "account_balance": "0.00",
+                                             "month_to_date_usage": self.usage})
+        if m == "GET" and path == "/snapshots":
+            return httpx.Response(200, json=self._page(req, "snapshots", self.snaps))
+        if m == "DELETE" and (mm := re.fullmatch(r"/snapshots/(\d+)", path)):
+            self.snaps = [x for x in self.snaps if str(x["id"]) != mm.group(1)]
+            return httpx.Response(204)
+        if m == "GET" and (mm := re.fullmatch(r"/actions/(\d+)", path)):
+            return httpx.Response(200, json={"action": {"id": int(mm.group(1)), "status": "completed"}})
+        if path == "/functions/namespaces":
+            if m == "GET":
+                return httpx.Response(200, json={"namespaces": [{k: v for k, v in n.items() if k != "key"}
+                                                                for n in self.namespaces] or None})
+            ns = {"namespace": f"fn-{len(self.namespaces) + 1}", "label": body["label"], "region": body["region"],
+                  "api_host": "https://faas.test", "uuid": "u", "key": "k"}
+            self.namespaces.append(ns)
+            return httpx.Response(200, json={"namespace": ns})
+        if mm := re.fullmatch(r"/functions/namespaces/([^/]+)", path):
+            self.namespaces = [n for n in self.namespaces if n["namespace"] != mm.group(1)]
+            return httpx.Response(204)
+        if mm := re.fullmatch(r"/functions/namespaces/([^/]+)/triggers", path):
+            self.triggers.append(body)
+            return httpx.Response(200, json={"trigger": body})
         if m == "GET" and path == "/droplets":
             tag = req.url.params.get("tag_name")
             items = [d for d in self.droplets.values() if not tag or tag in d["tags"]]
@@ -114,6 +144,11 @@ class FakeDO:
             d["status"], d["networks"] = "active", {"v4": [{"type": "public", "ip_address": f"198.51.100.{did % 250}"}]}
             return httpx.Response(200, json={"droplet": d})
         if m == "POST" and (mm := re.fullmatch(r"/droplets/(\d+)/actions", path)):
+            if body["type"] == "snapshot":
+                d = self.droplets[int(mm.group(1))]
+                self.snaps.append({"id": 500 + len(self.snaps), "name": body["name"], "regions": ["sgp1"],
+                                   "size_gigabytes": 2, "resource_id": d["id"]})
+                return httpx.Response(201, json={"action": {"id": 77, "status": "in-progress"}})
             return httpx.Response(201, json={"action": {"type": body["type"], "status": "in-progress"}})
         if m == "POST" and path == "/tags":
             return httpx.Response(201, json={"tag": {"name": body["name"]}})

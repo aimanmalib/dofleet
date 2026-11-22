@@ -14,6 +14,11 @@ confirm_over_usd = 50         # ask twice when a batch would cost more than this
 max_per_batch = 10            # DigitalOcean accepts at most 10 names in one create call
 ready_timeout = "10m"
 volume_usd_per_gb_month = 0.10   # DigitalOcean block storage list price, used for the cost estimate
+budget_usd = 0                # month ceiling in USD; 0 = off. `up` refuses to pass it, `reap` acts on it
+budget_action = "reap"        # when usage this month reaches budget_usd: "reap" deletes every dofleet droplet, "warn" only reports
+require_ttl_for = ["gpu-"]    # sizes starting with these cannot be created without an expiry timer
+bake_keep = 1                 # snapshots kept per preset by `dofleet bake`
+functions_region = "sgp1"     # where `dofleet install-reaper` puts the DigitalOcean Function
 reap_grace = "0m"             # extra time after expiry before `reap` deletes
 
 [profiles.default]
@@ -53,6 +58,21 @@ image = "ubuntu-24-04-x64"
 cloud_init = "harden"
 ttl = "6h"
 volumes = [100]
+
+[presets.gpu]
+description = "One H100 GPU, CUDA-ready image, dies after 2 hours (GPU droplets need GPU access on your account)"
+regions = ["tor1", "nyc2", "ams3"]
+sizes = ["gpu-h100x1-80gb", "gpu-l40sx1-48gb", "gpu-4000adax1-20gb"]
+image = "gpu-h100x1-base"
+cloud_init = "harden"
+ttl = "2h"
+ready_timeout = "20m"
+
+[mcp]
+presets = ["tiny", "quick", "docker", "scratch"]   # what an AI agent may create through `dofleet mcp`
+max_ttl = "4h"                                    # longest timer the agent may set
+max_droplets = 3                                  # dofleet droplets allowed at once
+exec_timeout_s = 600                              # longest command the agent may run
 
 [presets.desktop]
 description = "Remote Linux desktop (XFCE over RDP, port 3389), 4 vCPU / 8 GB, dies after 8 hours"

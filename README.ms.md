@@ -4,68 +4,56 @@ Droplet DigitalOcean pakai-buang yang membersihkan dirinya sendiri.
 
 [English](README.md)
 
-Setiap droplet yang dicipta `dofleet` diberi pemasa tamat. Bila pemasa habis, `dofleet reap` (jalankan dari cron) memadamnya. Anda nampak kos satu kumpulan sebelum mengesahkan, dan berapa yang sudah dibelanjakan setiap droplet semasa ia berjalan. Jika saiz yang anda mahu habis stok di rantau anda, `dofleet` beralih ke saiz atau rantau seterusnya dalam pratetap, bukan gagal.
+Setiap droplet yang dicipta `dofleet` membawa pemasa tamat, dan reaper memadamnya bila masa tamat, sama ada anda ingat atau tidak. Anda nampak kos sebelum mengesahkan, bajet bulanan menghalang anda daripada melepasinya, dan saiz yang habis stok beralih ke pilihan seterusnya dalam pratetap.
 
 ```console
-$ dofleet --lang ms up quick -n kikis -c 3
-Pratetap      quick
-Lokasi        sgp1  s-4vcpu-8gb-amd  (4 vCPU / 8 GB / 160 GB)
-              sgp1 s-4vcpu-8gb habis stok, guna pilihan seterusnya
-Nama          kikis-01, kikis-02, kikis-03
-Pemasa tamat  8h00m
-Kos           kira-kira $2.00 jika hidup sehingga pemasa tamat, $168.00 untuk sebulan penuh
-Cipta 3 droplet? [y/N]: y
+$ dofleet --lang ms run scratch --sync ./data --pull laporan.csv -- python3 proses.py
+Pratetap      scratch
+Lokasi        sgp1  s-4vcpu-8gb  (4 vCPU / 8 GB / 160 GB)
+Volume        100 GB, dipadam bersama droplet
+Pemasa tamat  6h00m
+Bajet         baki $41.20 bulan ini
+Hasil disalin ke dofleet-out/run
+Kod keluar 0, 7.4 minit, kira-kira $0.01.
 ```
 
-## Kenapa bukan doctl sahaja?
+## Apa yang ia buat
 
-[`doctl`](https://github.com/digitalocean/doctl) ialah CLI rasmi dan meliputi seluruh API. `dofleet` membuat lebih sedikit, untuk satu kerja: mesin jangka pendek yang anda hidupkan untuk satu tugas dan terlupa padam.
+- **Pemasa + reaper.** `dofleet reap` dari cron, atau `dofleet install-reaper` menjalankannya dalam akaun DigitalOcean anda sebagai Function berjadual, jadi tiada mesin anda perlu hidup.
+- **Kerja satu arahan.** `dofleet run` hidupkan droplet, salin folder, jalankan arahan (output dipapar terus), salin hasil balik, padam semua.
+- **Duit.** Kos sebelum cipta, belanja setakat ini dalam `ls`, dan siling `budget_usd`: `up` ditolak bila melepasi bajet, dan reaper boleh memadam semua droplet dofleet bila penggunaan bulan ini mencapainya. Saiz GPU wajib ada pemasa.
+- **Untuk ejen AI.** `dofleet mcp` ialah pelayan MCP: Claude atau ejen lain boleh meminjam droplet, menjalankan arahan dan memulangkannya, dalam had yang anda tetapkan (`[mcp]` dalam config). Ejen tidak pernah nampak token anda.
+- **Boot pantas.** `dofleet bake` mengambil snapshot persediaan yang siap; `up --baked` boot dalam kira-kira 40 saat, bukan 2 hingga 3 minit.
+- **CI dan pratonton.** GitHub Action (`action.yml`) mencipta droplet untuk setiap kerja atau pull request dan memadamnya selepas itu.
+- **Persediaan kemas.** Ubuntu dikeraskan, Docker, desktop jauh melalui RDP, atau skrip sendiri. "Sedia" bermaksud cloud-init sudah siap.
 
-- Pemasa tamat + `reap` untuk droplet yang terlupa
-- Kos dipapar sebelum cipta, belanja setakat ini dalam `ls`
-- Sandaran bila saiz habis stok, merentas saiz dan rantau
-- Menunggu sehingga SSH (atau RDP) benar-benar menjawab
-- Pratetap dan skrip persediaan dalam satu fail TOML
-- Menu bernombor bila dijalankan tanpa hujah
-- Paparan Bahasa Melayu dan Inggeris
-
-Jika anda sudah guna doctl, `dofleet` membaca tokennya, jadi tiada apa perlu disediakan.
-
-## Pasang
+## Pasang dan token
 
 ```bash
-pipx install dofleet        # atau: uv tool install dofleet
+pipx install dofleet
+export DIGITALOCEAN_TOKEN=dop_v1_...
+dofleet whoami
 ```
 
-Python 3.11 ke atas. Sebelum keluaran PyPI pertama: `pipx install git+https://github.com/aimanmalib/dofleet`.
+Jika anda sudah guna `doctl`, tokennya dibaca terus.
 
-## Token
+## Arahan utama
 
-Cipta token di <https://cloud.digitalocean.com/account/api/tokens>, kemudian `export DIGITALOCEAN_TOKEN=dop_v1_...`, atau biar `dofleet` guna log masuk `doctl auth init` sedia ada. `dofleet whoami` menunjukkan akaun dan sumber token yang dipakai.
+| Arahan | Fungsi |
+| --- | --- |
+| `dofleet up [pratetap]` | Cipta droplet (`--ttl`, `--volume`, `--baked`, `--dry-run`) |
+| `dofleet run PRATETAP -- ARAHAN` | Satu kerja atas droplet baharu (`--sync`, `--pull`, `--env`) |
+| `dofleet ls`, `cost` | Senarai dengan belanja dan masa tinggal; penggunaan bulan ini dan baki bajet |
+| `dofleet extend`, `down`, `reap` | Lanjut pemasa, padam, padam yang tamat |
+| `dofleet bake`, `install-reaper`, `mcp` | Snapshot, reaper dalam DigitalOcean Functions, pelayan MCP |
 
-## Arahan
+Senarai penuh, contoh config, GitHub Action dan butiran keselamatan ada dalam [README Inggeris](README.md). Tambah `--lang ms` untuk paparan Bahasa Melayu (lalai ikut `LANG`).
 
-Senarai penuh ada dalam [README Inggeris](README.md#commands). Ringkasnya: `up`, `ls`, `extend`, `reap`, `down`, `restart`, `ssh`, `cost`, `sizes`, `presets`, `init`, `whoami`. Tambah `--json` untuk output mesin dan `--lang ms` untuk Bahasa Melayu (lalai ikut `LANG`).
+## Keselamatan
 
-Jalankan `reap` dari cron setiap 10 minit:
-
-```cron
-*/10 * * * * DIGITALOCEAN_TOKEN=dop_v1_... /home/anda/.local/bin/dofleet reap --yes >> ~/.dofleet-reap.log 2>&1
-```
-
-`reap` hanya menyentuh droplet bertag `dofleet` dengan tag `dofleet-exp-<masa unix>` yang sudah lepas. Droplet yang anda cipta dengan tangan atau alat lain tidak akan dipadam.
-
-## Pratetap dan templat
-
-Ubah pratetap atau tambah sendiri dalam `~/.config/dofleet/config.toml` (`dofleet init` menulis fail permulaan berkomen). Templat persediaan ialah skrip shell biasa: `harden` (pengguna sudo, firewall, fail2ban, kemas kini keselamatan automatik), `docker`, dan `desktop` (desktop XFCE melalui RDP; kata laluan dijana dan dipapar sekali).
-
-## Keselamatan dan volume
-
-- Akaun tanpa kunci SSH: `dofleet` menambah kunci awam tempatan anda (`~/.ssh/id_ed25519.pub` dahulu). Tiada kunci langsung: DigitalOcean e-mel kata laluan root, dan `dofleet` kekalkan log masuk root + kata laluan supaya anda tidak terkunci.
-- "Sedia" bermaksud cloud-init sudah `done` (disemak melalui SSH), bukan hanya port terbuka.
-- `volumes = [100]` atau `--volume 100`: volume diformat ext4, dipasang di `/mnt/<nama volume>`, dan dipadam bersama droplet oleh `down` dan `reap`. Volume yang anda pasang sendiri tidak disentuh.
-- Corak dalam `down` (`'web-*'`) hanya padan droplet buatan dofleet, kecuali dengan `--any`.
-- `notify_cmd` dalam config: arahan yang dijalankan selepas `reap` memadam sesuatu.
+- `reap` dan reaper Function hanya menyentuh droplet bertag `dofleet`. Corak dalam `down` (`'web-*'`) hanya padan droplet dofleet kecuali dengan `--any`.
+- Akaun tanpa kunci SSH: kunci awam tempatan anda ditambah. Tiada kunci langsung: log masuk root + kata laluan kekal supaya anda tidak terkunci.
+- Arahan cipta tidak diulang selepas ralat pelayan, kerana DigitalOcean mungkin sudah mencipta droplet.
 
 ## Lesen
 

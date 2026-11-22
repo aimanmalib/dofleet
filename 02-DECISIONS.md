@@ -48,3 +48,22 @@ not in cloud-init-output.log; volume mounted at `/mnt/<name>`. Not verified: a f
 ## D8: host integration
 `~/ops/dofleet` runs `reap` every 10 minutes on the host and holds the `gerudi` preset for the disaster-recovery drill
 (`~/ops/jaring/PULIH-BENCANA.md`). That lives outside this repo on purpose: the tool stays generic.
+
+## D9 (23 Nov 2026): run, budget, Functions reaper, MCP, bake, GitHub Action, GPU rule
+All seven were exercised on the live account the same day:
+- `run tiny --sync --pull --env`: 2.3 min end to end, output streamed, result file pulled, droplet gone. Found: a second
+  run seconds after a key upload got 422 "already in use" because the key list lags; keys are now looked up by MD5
+  fingerprint (`GET /account/keys/<fp>`), which matched `ssh-keygen -E md5`.
+- budget: `budget_usd = 0.001` refused the create before any API write.
+- Functions reaper: namespace + python:3.12 action + SCHEDULED trigger. A droplet with a 1 min timer was deleted by the
+  Function at 21:15:47 while the host cron had last run at 21:10, so the Function did it. The namespace key is only
+  returned on create, so install deletes and recreates the `dofleet` namespace (idempotent). The reaper code is a
+  standalone stdlib file because the runtime has nothing else.
+- MCP: a real `claude -p` session created `tiny`, ran a command, deleted it, and was refused `desktop` by policy.
+  Hand-written JSON-RPC (no SDK dependency); the agent only sees droplets tagged `dofleet`.
+- bake: snapshot of a 10 GB droplet took 34 s; `up --baked` was ready in 40 s (vs about 150 s) with the harden setup intact.
+- GitHub Action: `scripts/action.sh` run locally with Actions-style env created and deleted `pr-42` and wrote ip/name outputs.
+  Inputs reach the script as env vars, never pasted into shell. Not yet run on GitHub itself (repo is private).
+- GPU: this account has no GPU sizes, so the error now says so (`err.size_unknown`) instead of "sold out".
+Other finds: Rich swallowed `[tor1, nyc2]` in error text as markup (now escaped); DigitalOcean reuses IPs, so every
+droplet gets its own known_hosts file instead of a shared one.
