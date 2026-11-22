@@ -10,8 +10,11 @@ from .config import Settings
 
 
 def create_and_wait(client: DOClient, settings: Settings, plan: ops.Plan, *, wait: bool = True,
-                    on_update: Callable[[dict[int, str]], None] = lambda s: None) -> dict[int, dict]:
+                    on_update: Callable[[dict[int, str]], None] = lambda s: None,
+                    on_created: Callable[[list[dict]], None] = lambda ds: None) -> dict[int, dict]:
+    """on_created runs as soon as the droplets exist, so a caller can clean up even if waiting fails."""
     created = ops.execute_up(client, settings, plan)
+    on_created(created)
     if not wait:
         return {d["id"]: {"droplet": d, "ip": None, "state": "new"} for d in created}
     port = int(plan.preset.get("ready_port", 22))

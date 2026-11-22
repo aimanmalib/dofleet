@@ -92,6 +92,8 @@ class FakeDO:
             if m == "GET":
                 return httpx.Response(200, json={"namespaces": [{k: v for k, v in n.items() if k != "key"}
                                                                 for n in self.namespaces] or None})
+            if any(n["label"] == body["label"] for n in self.namespaces):  # measured: DO rejects duplicate labels
+                return httpx.Response(422, json={"message": f"label '{body['label']}' already in use"})
             ns = {"namespace": f"fn-{len(self.namespaces) + 1}", "label": body["label"], "region": body["region"],
                   "api_host": "https://faas.test", "uuid": "u", "key": "k"}
             self.namespaces.append(ns)
@@ -154,7 +156,10 @@ class FakeDO:
             return httpx.Response(201, json={"tag": {"name": body["name"]}})
         if mm := re.fullmatch(r"/tags/([^/]+)/resources", path):
             for r in body["resources"]:
-                tags = self.droplets[int(r["resource_id"])]["tags"]
+                if r.get("resource_type") == "volume":
+                    tags = self.vols[r["resource_id"]].setdefault("tags", [])
+                else:
+                    tags = self.droplets[int(r["resource_id"])]["tags"]
                 if m == "POST" and mm.group(1) not in tags:
                     tags.append(mm.group(1))
                 if m == "DELETE" and mm.group(1) in tags:

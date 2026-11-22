@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from typing import Optional
@@ -136,6 +137,11 @@ def _plan_dict(plan: ops.Plan) -> dict:
             "cost_until_expiry_usd": round(plan.cost_ttl, 2), "cost_month_usd": round(plan.cost_month, 2)}
 
 
+def _tilde(path: str) -> str:
+    home = os.path.expanduser("~")
+    return "~" + path[len(home):] if path.startswith(home + os.sep) else path
+
+
 def show_plan(plan: ops.Plan) -> None:
     if S.as_json:
         return
@@ -150,7 +156,7 @@ def show_plan(plan: ops.Plan) -> None:
     if plan.ssh_key_ids:
         tb.add_row(t("plan.keys"), str(len(plan.ssh_key_ids)))
     elif plan.upload_key:
-        tb.add_row(t("plan.keys"), t("plan.upload_key", path=plan.upload_key[0]))
+        tb.add_row(t("plan.keys"), t("plan.upload_key", path=_tilde(plan.upload_key[0])))
     else:
         tb.add_row(t("plan.keys"), f"[yellow]{t('plan.no_keys')}[/]")
     tb.add_row(t("plan.timer"), fleet.format_duration(plan.ttl_s) if plan.ttl_s else f"[yellow]{t('plan.no_timer')}[/]")
@@ -226,7 +232,12 @@ def _pick(patterns: list[str], any_glob: bool = True) -> list[dict]:
 
 @app.command("down", help="Delete droplets by name, id or glob (web-*)")
 def down(patterns: list[str] = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y"),
-         any_droplet: bool = typer.Option(False, "--any", help="Let patterns match droplets dofleet did not create")):
+         any_droplet: bool = typer.Option(False, "--any", help="Let patterns match droplets dofleet did not create"),
+         missing_ok: bool = typer.Option(False, "--missing-ok", help="Exit 0 when nothing matches (already gone)")):
+    if missing_ok and not fleet.match(S.client().droplets(), patterns):
+        if S.as_json:
+            out_json({"deleted": []})
+        return
     hits = _pick(patterns, any_droplet)
     say(t("down.list", names=", ".join(d["name"] for d in hits)))
     if not confirm(t("down.confirm", n=len(hits)), yes):
@@ -268,7 +279,11 @@ def reap(yes: bool = typer.Option(False, "--yes", "-y"), dry_run: bool = typer.O
         return
     deleted, failed = [], []
     owned = _owned_volumes(victims)
+    budget_kill = st.over and budget.action(S.settings) == "reap"
+    grace = ops.reap_grace(S.settings)
     for d in victims:  # one failure must not stop the rest
+        if not budget_kill and not ops.still_expired(S.client(), d, time.time(), grace):
+            continue  # extended since the list was taken
         try:
             volumes.destroy(S.client(), d, owned)
             deleted.append(d)
@@ -312,7 +327,11 @@ def extend(patterns: list[str] = typer.Argument(...), ttl: str = typer.Option("2
     now = time.time()
     ttl_s = None if keep else fleet.parse_duration(ttl)
     done = []
-    for d in _pick(patterns):
+    hits = _pick(patterns, any_glob=False)
+    foreign = [d for d in hits if not fleet.is_managed(d)]
+    if foreign:  # a timer on a droplet dofleet did not make would hand it to the reaper
+        err.print(f"[yellow]{t('extend.foreign', names=', '.join(d['name'] for d in foreign))}[/]")
+    for d in [d for d in hits if fleet.is_managed(d)]:
         exp = ops.set_expiry(S.client(), d, ttl_s, now)
         done.append({"id": d["id"], "name": d["name"], "expires_at": exp})
         if not S.as_json:

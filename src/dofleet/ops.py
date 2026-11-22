@@ -63,9 +63,15 @@ def resolve_ssh_keys(client: DOClient, wanted) -> list[int]:
     return out
 
 
+def upload_mode(settings: Settings) -> str:
+    """yes = add the local key only when the account has none; always = add it every time (CI runners); no = never."""
+    mode = str(os.environ.get("DOFLEET_UPLOAD_KEY") or settings.defaults.get("upload_local_key", "yes")).lower()
+    return {"false": "no", "0": "no", "true": "yes", "1": "yes"}.get(mode, mode if mode in ("yes", "no", "always") else "yes")
+
+
 def local_public_key(settings: Settings) -> tuple[str, str] | None:
     """First readable public key from defaults.local_keys, for accounts that have no SSH key yet."""
-    if str(settings.defaults.get("upload_local_key", "yes")).lower() in ("no", "false", "0"):
+    if upload_mode(settings) == "no":
         return None
     for raw in settings.defaults.get("local_keys", []):
         path = os.path.expanduser(raw)
@@ -112,7 +118,9 @@ def plan_up(client: DOClient, settings: Settings, preset_name: str, prefix: str 
     if ttl_s is None and prefixes and choice.size["slug"].startswith(prefixes):
         raise ConfigError("err.ttl_required", size=choice.size["slug"])
     key_ids = resolve_ssh_keys(client, wanted_keys)
-    upload = local_public_key(settings) if not key_ids and wanted_keys == "all" else None
+    mode = upload_mode(settings)
+    upload = (local_public_key(settings)
+              if (mode == "always" or (not key_ids and wanted_keys == "all")) and mode != "no" else None)
     has_key = bool(key_ids or upload)
     tmpl_vars = {**preset.get("vars", {}), **ov.vars}
     # Without any key DigitalOcean emails a root password: keep password + root login on, or the box is unreachable.
@@ -207,6 +215,11 @@ def execute_up(client: DOClient, settings: Settings, plan: Plan, now: float | No
                 raise ConfigError("err.sold_out", regions=", ".join(plan.regions_tried),
                                   sizes=", ".join(plan.sizes_tried)) from e
             plan.region, plan.size, plan.fell_back = nxt.region, nxt.size, True
+            # the fallback may be dearer: check the budget again for what is left to create
+            vol_month = volumes.monthly_cost(plan.preset, float(settings.defaults.get("volume_usd_per_gb_month", 0.10)))
+            cost, _ = fleet.batch_cost(float(nxt.size.get("price_hourly", 0)) + vol_month / fleet.HOURS_PER_MONTH,
+                                       float(nxt.size.get("price_monthly", 0)) + vol_month, len(pending), plan.ttl_s)
+            budget.check_new(budget.status(client, settings), cost)
             continue
         pending = rest
     return created
@@ -227,10 +240,24 @@ def rows(droplets: list[dict], now: float) -> list[dict]:
     return sorted(out, key=lambda r: (r["expires_in_s"] is None, r["expires_in_s"] or 0, r["name"] or ""))
 
 
-def reap_list(client: DOClient, settings: Settings, now: float) -> list[dict]:
+def reap_grace(settings: Settings) -> int:
     g = str(settings.defaults.get("reap_grace") or "").strip()
-    grace = 0 if g in ("", "0", "0m", "0h", "0d") else fleet.parse_duration(g)
+    return 0 if g in ("", "0", "0m", "0h", "0d") else fleet.parse_duration(g)
+
+
+def reap_list(client: DOClient, settings: Settings, now: float) -> list[dict]:
+    grace = reap_grace(settings)
     return [d for d in fleet.expired(client.droplets(fleet.MARK_TAG), now - grace) if fleet.is_managed(d)]
+
+
+def still_expired(client: DOClient, droplet: dict, now: float, grace: int) -> bool:
+    """Re-read just before deleting: someone may have run `extend` since the list was taken."""
+    try:
+        fresh = client.droplet(droplet["id"])
+    except ApiError as e:
+        return False  # gone already, or unreadable: do not delete blind
+    exp = fleet.expires_at(fresh)
+    return fleet.is_managed(fresh) and exp is not None and exp + grace <= now
 
 
 def set_expiry(client: DOClient, droplet: dict, ttl_s: int | None, now: float, from_now: bool = False) -> int | None:
@@ -242,17 +269,37 @@ def set_expiry(client: DOClient, droplet: dict, ttl_s: int | None, now: float, f
         base = now if from_now else max(now, fleet.expires_at(droplet) or now)
         new_exp = int(base + ttl_s)
         client.tag_resource(f"{fleet.EXP_PREFIX}{new_exp}", droplet["id"])
-        client.tag_resource(fleet.MARK_TAG, droplet["id"])
     for t in old:
         if t != f"{fleet.EXP_PREFIX}{new_exp}":
             client.untag_resource(t, droplet["id"])
     return new_exp
 
 
-def orphan_volumes(client: DOClient, now: float, min_age_s: int = 3600) -> list[dict]:
-    """dofleet volumes attached to nothing for longer than min_age_s: left behind and still billing."""
-    return [v for v in client.volumes() if fleet.MARK_TAG in (v.get("tags") or []) and not v.get("droplet_ids")
-            and now - fleet.created_ts(v) > min_age_s]
+DETACHED_PREFIX = "dofleet-detached-"
+
+
+def orphan_volumes(client: DOClient, now: float, min_age_s: int = 3600, mark: bool = True) -> list[dict]:
+    """dofleet volumes that have been attached to nothing for longer than min_age_s. "Since when" is a
+    `dofleet-detached-<unix time>` tag set the first time a sweep sees the volume detached (volume age alone would
+    delete a volume someone just moved by hand); the tag is cleared again once it is attached."""
+    out = []
+    for v in client.volumes():
+        tags = v.get("tags") or []
+        if fleet.MARK_TAG not in tags:
+            continue
+        seen = [int(x[len(DETACHED_PREFIX):]) for x in tags if x.startswith(DETACHED_PREFIX) and x[len(DETACHED_PREFIX):].isdigit()]
+        if v.get("droplet_ids"):
+            for x in tags:
+                if x.startswith(DETACHED_PREFIX) and mark:
+                    client.untag_resource(x, v["id"], "volume")
+            continue
+        if not seen:
+            if mark and now - fleet.created_ts(v) > 300:  # skip volumes still being attached at create time
+                client.tag_resource(f"{DETACHED_PREFIX}{int(now)}", v["id"], "volume")
+            continue
+        if now - min(seen) > min_age_s:
+            out.append(v)
+    return out
 
 
 def cost_summary(client: DOClient, now: float) -> dict:

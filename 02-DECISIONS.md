@@ -67,3 +67,28 @@ All seven were exercised on the live account the same day:
 - GPU: this account has no GPU sizes, so the error now says so (`err.size_unknown`) instead of "sold out".
 Other finds: Rich swallowed `[tor1, nyc2]` in error text as markup (now escaped); DigitalOcean reuses IPs, so every
 droplet gets its own known_hosts file instead of a shared one.
+
+## D10 (23 Nov 2026): second red team (independent reviewer) and fixes
+An independent review (code only, no conclusions handed over) reported 15 findings; the two high ones and one medium were
+reproduced on the fake API before fixing (verify script: extend glob tagged a hand-made `web-prod`; an MCP agent deleted a
+human's `db`; a missing argument crashed the MCP server). Fixed, each with a regression test:
+- `extend` only acts on dofleet droplets and never adds the `dofleet` tag (a timer would hand a foreign droplet to the reaper).
+- MCP agents only see droplets they created (`dofleet-mcp` tag; `scope = "all"` to widen); any exception becomes an error reply;
+  extend checks the budget. Verified live: the agent could not exec on or delete `human-db`, and could on its own `agent-box`.
+- Orphan volumes: age counted from a `dofleet-detached-<time>` tag set when a sweep first sees the volume detached, not from creation.
+- Budget includes what running droplets will still cost (to their timer or month end) and is checked again after a dearer fallback.
+- Reapers re-read each droplet just before deleting (an `extend` in between wins); the Function treats 422 as "already going".
+- `install-reaper` creates the new namespace first and removes the old one only after it works. Measured: labels must be unique
+  per account (422 "label already in use"), so new namespaces get `dofleet-<unix time>`; the fake API now enforces that too.
+  `--every` must map to a valid cron (5m..30m, 1h..12h, 1d).
+- `run`: droplets are tracked as soon as they exist (cleanup even if waiting fails); results unpacked with tarfile filter
+  "data" (test with a `../../escaped.txt` member); `--env` names validated. Volume names get a random suffix.
+- GitHub Action: `version` via env, `args` for run = one shell string, `down --missing-ok` instead of `|| true`, the runner key
+  is always added (`DOFLEET_UPLOAD_KEY=always`), a generated password is masked and kept out of step outputs.
+Not changed: the desktop password still travels in user data (readable by processes on that droplet); documented in README.
+
+## D11: logo, banner, demo
+Mark = a droplet holding a countdown ring; the amber dot marks time already gone. Colours avoid DigitalOcean's blue on purpose
+(no confusion with their brand). Wordmark and tagline are outlined paths (Space Grotesk, OFL) because GitHub does not load
+fonts inside SVG. `scripts/make-assets.py` rebuilds banner-{light,dark}.svg and social.png. The demo GIF is a real recording
+(asciinema + agg), with spinner time compressed; nothing in it is staged.

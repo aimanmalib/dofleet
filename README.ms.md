@@ -1,10 +1,19 @@
-# dofleet
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/banner-dark.svg">
+    <img alt="dofleet" src="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/banner-light.svg" width="560">
+  </picture>
+</p>
+
+<p align="center"><a href="README.md">English</a></p>
 
 Droplet DigitalOcean pakai-buang yang membersihkan dirinya sendiri.
 
-[English](README.md)
-
 Setiap droplet yang dicipta `dofleet` membawa pemasa tamat, dan reaper memadamnya bila masa tamat, sama ada anda ingat atau tidak. Anda nampak kos sebelum mengesahkan, bajet bulanan menghalang anda daripada melepasinya, dan saiz yang habis stok beralih ke pilihan seterusnya dalam pratetap.
+
+<p align="center"><img alt="demo dofleet run" src="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/demo.gif" width="760"></p>
+
+Contoh dalam Bahasa Melayu:
 
 ```console
 $ dofleet --lang ms run scratch --sync ./data --pull laporan.csv -- python3 proses.py
@@ -51,7 +60,9 @@ Senarai penuh, contoh config, GitHub Action dan butiran keselamatan ada dalam [R
 
 ## Keselamatan
 
-- `reap` dan reaper Function hanya menyentuh droplet bertag `dofleet`. Corak dalam `down` (`'web-*'`) hanya padan droplet dofleet kecuali dengan `--any`.
+- `reap` dan reaper Function hanya menyentuh droplet bertag `dofleet`, dan membaca semula setiap droplet sebelum memadam. Corak dalam `down` (`'web-*'`) hanya padan droplet dofleet kecuali dengan `--any`; `extend` menolak droplet bukan dofleet.
+- Ejen AI melalui MCP hanya nampak droplet yang ia cipta sendiri (tag `dofleet-mcp`), bukan droplet anda.
+- Fail yang dibawa balik oleh `run` dibuka dengan penapis `data` tarfile: tiada laluan mutlak, `..` atau pautan keluar.
 - Akaun tanpa kunci SSH: kunci awam tempatan anda ditambah. Tiada kunci langsung: log masuk root + kata laluan kekal supaya anda tidak terkunci.
 - Arahan cipta tidak diulang selepas ralat pelayan, kerana DigitalOcean mungkin sudah mencipta droplet.
 

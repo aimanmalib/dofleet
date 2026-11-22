@@ -25,7 +25,7 @@ inputs:
     required: false
     default: 2h
   args:
-    description: Extra arguments for the command (for run, the command after --)
+    description: "For run: the shell command to run on the droplet (one string, pipes and && allowed). For up/down: extra dofleet flags"
     required: false
     default: ""
   config:
@@ -51,9 +51,12 @@ runs:
   steps:
     - name: Install dofleet
       shell: bash
+      env:
+        DOFLEET_VERSION: ${{ inputs.version }}
+        DOFLEET_ACTION_PATH: ${{ github.action_path }}
       run: |
-        if [ -n "${{ inputs.version }}" ]; then pip install --quiet "dofleet==${{ inputs.version }}" || pip install --quiet "git+https://github.com/aimanmalib/dofleet@${{ inputs.version }}"
-        else pip install --quiet "${{ github.action_path }}"; fi
+        if [ -n "$DOFLEET_VERSION" ]; then pip install --quiet "dofleet==$DOFLEET_VERSION" || pip install --quiet "git+https://github.com/aimanmalib/dofleet@$DOFLEET_VERSION"
+        else pip install --quiet "$DOFLEET_ACTION_PATH"; fi
     - name: Run dofleet
       id: dofleet
       shell: bash
@@ -65,4 +68,5 @@ runs:
         DOFLEET_TTL: ${{ inputs.ttl }}
         DOFLEET_ARGS: ${{ inputs.args }}
         DOFLEET_CONFIG_TEXT: ${{ inputs.config }}
-      run: bash "${{ github.action_path }}/scripts/action.sh"
+        DOFLEET_ACTION_PATH: ${{ github.action_path }}
+      run: bash "$DOFLEET_ACTION_PATH/scripts/action.sh"

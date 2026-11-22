@@ -127,18 +127,18 @@ class DOClient:
     def droplet_action(self, droplet_id: int, action: str) -> dict:
         return self.request("POST", f"/droplets/{droplet_id}/actions", json={"type": action}).get("action", {})
 
-    def tag_resource(self, tag: str, droplet_id: int) -> None:
+    def tag_resource(self, tag: str, droplet_id, kind: str = "droplet") -> None:
         try:
             self.request("POST", "/tags", json={"name": tag})
         except ApiError as e:
             if e.status != 422:  # 422 = tag already exists, which is fine
                 raise
         self.request("POST", f"/tags/{tag}/resources",
-                     json={"resources": [{"resource_id": str(droplet_id), "resource_type": "droplet"}]})
+                     json={"resources": [{"resource_id": str(droplet_id), "resource_type": kind}]})
 
-    def untag_resource(self, tag: str, droplet_id: int) -> None:
+    def untag_resource(self, tag: str, droplet_id, kind: str = "droplet") -> None:
         self.request("DELETE", f"/tags/{tag}/resources",
-                     json={"resources": [{"resource_id": str(droplet_id), "resource_type": "droplet"}]})
+                     json={"resources": [{"resource_id": str(droplet_id), "resource_type": kind}]})
 
 
 def public_ipv4(droplet: dict) -> str | None:

@@ -6,13 +6,16 @@ create -> wait for setup -> copy a local folder up -> run the command (output st
 
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
+import tarfile
 from pathlib import Path
 
 from . import ready
 
 WORKDIR = "work"  # relative to the login user's home on the droplet
+_ENV_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class JobError(Exception):
@@ -46,13 +49,27 @@ def upload(droplet_id: int, ip: str, user: str, identity: str | None, folder: Pa
 
 def execute(droplet_id: int, ip: str, user: str, identity: str | None, command: list[str],
             env: dict[str, str] | None = None) -> int:
+    for k in env or {}:
+        if not _ENV_KEY.match(k):
+            raise JobError("err.run_env_key", name=k)
     exports = " ".join(f"{k}={shlex.quote(v)}" for k, v in (env or {}).items())
     remote = f"mkdir -p {WORKDIR} && cd {WORKDIR} && {('env ' + exports + ' ') if exports else ''}{shlex.join(command)}"
     return subprocess.call([*_ssh(droplet_id, ip, user, identity), remote])
 
 
 def download(droplet_id: int, ip: str, user: str, identity: str | None, paths: list[str], dest: Path) -> None:
+    """Extract with Python's tarfile 'data' filter: a tampered droplet cannot write outside dest (no absolute paths,
+    no '..', no links pointing out, no device files, no setuid bits)."""
     dest.mkdir(parents=True, exist_ok=True)
     quoted = " ".join(shlex.quote(p) for p in paths)
-    _pipe([*_ssh(droplet_id, ip, user, identity), f"cd {WORKDIR} && tar czf - -- {quoted}"],
-          ["tar", "xzf", "-", "-C", str(dest)], "download")
+    proc = subprocess.Popen([*_ssh(droplet_id, ip, user, identity), f"cd {WORKDIR} && tar czf - -- {quoted}"],
+                            stdout=subprocess.PIPE)
+    try:
+        with tarfile.open(fileobj=proc.stdout, mode="r|gz") as tar:
+            tar.extractall(dest, filter="data")
+    except (tarfile.TarError, OSError) as e:
+        proc.kill()
+        proc.wait()
+        raise JobError("err.run_copy", step="download", rc=str(e)[:80]) from e
+    if proc.wait():
+        raise JobError("err.run_copy", step="download", rc=proc.returncode)

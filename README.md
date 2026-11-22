@@ -1,26 +1,35 @@
-# dofleet
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/banner-dark.svg">
+    <img alt="dofleet: disposable droplets that clean up after themselves" src="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/banner-light.svg" width="560">
+  </picture>
+</p>
 
-Disposable DigitalOcean droplets that clean up after themselves.
+<p align="center">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-0E2A3D">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0E2A3D">
+  <img alt="Tested on a live DigitalOcean account" src="https://img.shields.io/badge/tested%20on-a%20live%20DigitalOcean%20account-0F9F8F">
+  <img alt="MCP server" src="https://img.shields.io/badge/MCP-server-0F9F8F">
+  <img alt="English and Bahasa Melayu" src="https://img.shields.io/badge/i18n-English%20%7C%20Bahasa%20Melayu-4B6475">
+</p>
 
-[Bahasa Melayu](README.ms.md)
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#jobs-with-run">Jobs</a> ·
+  <a href="#budget">Budget</a> ·
+  <a href="#the-reaper">Reaper</a> ·
+  <a href="#ai-agents-mcp">AI agents</a> ·
+  <a href="#github-action">GitHub Action</a> ·
+  <a href="README.ms.md">Bahasa Melayu</a>
+</p>
 
 Every droplet `dofleet` creates carries an expiry timer, and a reaper deletes it when the timer runs out, whether or not you remember. You see what a batch costs before you confirm, a month budget stops you before you pass it, and a sold-out size falls back to the next one in your preset instead of failing.
 
-```console
-$ dofleet run scratch --sync ./data --pull report.csv -- python3 crunch.py
-Preset        scratch
-Where         sgp1  s-4vcpu-8gb  (4 vCPU / 8 GB / 160 GB)
-Volumes       100 GB, deleted together with the droplet
-Expiry timer  6h00m
-Cost          about $0.52 if it lives until the timer, $58.00 for a full month
-Budget        $41.20 left this month
-$ python3 crunch.py
-...
-Results copied to dofleet-out/run
-Exit code 0, 7.4 min, about $0.01.
-```
+<p align="center"><img alt="dofleet run: boot, copy, run, copy back, delete, in one command" src="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/demo.gif" width="760"></p>
 
-The droplet, its volume and the bill stop the moment the job ends.
+<sub>Recorded on a real account; waiting time is shortened. The droplet existed for 2 minutes and cost under a cent.</sub>
+
+When the job ends, the droplet is gone and so is the bill.
 
 ## What it does
 
@@ -71,9 +80,9 @@ Create a token at <https://cloud.digitalocean.com/account/api/tokens> (custom sc
 | `dofleet up [preset] -n NAME -c N` | Create droplets. `--ttl 2h`, `--keep` (no timer), `-r sgp1`, `-s s-2vcpu-4gb`, `--volume 100`, `--baked`, `--var user=dev`, `--dry-run` |
 | `dofleet run PRESET -- COMMAND` | One job on a fresh droplet. `--sync DIR`, `--pull PATH`, `--env K=V`, `--keep-on-fail` |
 | `dofleet ls [-m]` | Droplets with IP, age, spend so far, price per month, time left |
-| `dofleet extend NAME --ttl 4h` | Push the timer out. `--keep` removes it |
+| `dofleet extend NAME --ttl 4h` | Push the timer out (dofleet droplets only). `--keep` removes it |
 | `dofleet reap [--yes] [--dry-run]` | Delete expired dofleet droplets, orphan volumes, and everything once over budget |
-| `dofleet down NAME... [--yes]` | Delete by name, id or pattern (`'web-*'`), with their dofleet volumes. Patterns only match dofleet droplets unless `--any` |
+| `dofleet down NAME... [--yes]` | Delete by name, id or pattern (`'web-*'`), with their dofleet volumes. Patterns only match dofleet droplets unless `--any`; `--missing-ok` for cleanup jobs |
 | `dofleet ssh NAME [-- command]` | SSH in as the user the preset created, or run one command |
 | `dofleet bake NAME` / `dofleet snapshots` | Snapshot a finished droplet for fast boots / list those snapshots |
 | `dofleet install-reaper` / `uninstall-reaper` | Reaper as a scheduled DigitalOcean Function. `--every 10m`, `--region`, `--notify-url`, `--token-env` |
@@ -96,7 +105,7 @@ dofleet install-reaper --every 10m            # runs in your DigitalOcean accoun
 */10 * * * * DIGITALOCEAN_TOKEN=dop_v1_... /home/you/.local/bin/dofleet reap --yes >> ~/.dofleet-reap.log 2>&1
 ```
 
-It only touches droplets tagged `dofleet` with a passed `dofleet-exp-<unix time>` tag, their `dofleet` volumes, and `dofleet` volumes left attached to nothing for over an hour. Droplets you made by hand are never touched. The Function version stores the token in your own Functions namespace; give it a separate token with `--token-env` if you prefer. `--notify-url` posts a short report to a Slack or Discord style webhook; locally, `notify_cmd` in the config runs any command.
+It only touches droplets tagged `dofleet` with a passed `dofleet-exp-<unix time>` tag (re-read just before deleting, in case someone extended it), their `dofleet` volumes, and `dofleet` volumes that have been attached to nothing for over an hour, counted from when a reaper first saw them detached, so a volume you just moved is safe. Droplets you made by hand are never touched. The Function version stores the token in your own Functions namespace; give it a separate token with `--token-env` if you prefer. `--notify-url` posts a short report to a Slack or Discord style webhook; locally, `notify_cmd` in the config runs any command.
 
 ## Budget
 
@@ -106,7 +115,7 @@ budget_usd = 50          # this month's DigitalOcean usage ceiling
 budget_action = "reap"   # at the ceiling: "reap" deletes every dofleet droplet, "warn" only reports
 ```
 
-`up` and `run` refuse a batch that would pass the ceiling (usage so far plus the batch's cost until its timer). The reaper applies `budget_action` once usage reaches it. Sizes listed in `require_ttl_for` (GPU by default) cannot be created without a timer.
+`up`, `run` and agent requests refuse anything that would pass the ceiling: usage so far, plus what running droplets will still cost until their timers (or month end without one), plus the new batch. A sold-out fallback to a dearer size is checked again. The reaper applies `budget_action` once usage reaches it. Sizes listed in `require_ttl_for` (GPU by default) cannot be created without a timer.
 
 ## Jobs with `run`
 
@@ -136,7 +145,7 @@ max_droplets = 3                                  # dofleet droplets at once
 exec_timeout_s = 600
 ```
 
-The agent can only see and act on droplets tagged `dofleet`, and the month budget applies.
+The agent only ever sees droplets it created itself (tagged `dofleet-mcp`); droplets you made with `dofleet up` are invisible to it, so it cannot run commands on, extend or delete them. `scope = "all"` widens that on purpose. The month budget applies to creates and extends, and a malformed request gets an error reply instead of stopping the server.
 
 ## GitHub Action
 
@@ -158,7 +167,7 @@ jobs:
       - run: echo "Preview at http://${{ steps.box.outputs.ip }}"
 ```
 
-Delete it when the pull request closes with `command: down` and the same `name`; if that never runs, the timer does it. `command: run` with `args` runs a job, and `config` takes a config file's contents (presets, budget).
+Delete it when the pull request closes with `command: down` and the same `name` (a droplet that is already gone is not an error); if that never runs, the timer does it. `command: run` takes `args` as one shell command, pipes and `&&` included. `config` takes a config file's contents (presets, budget). The runner's SSH key is added to the account automatically, inputs reach the shell only as environment variables, and a generated password is masked in the log and left out of the step outputs.
 
 ## Presets
 
@@ -194,6 +203,14 @@ A key you set overrides the bundled one; everything else stays as shipped.
 - **SSH keys.** If the account has none, dofleet adds your first local public key (named after its hash). With no key anywhere, DigitalOcean emails a root password and dofleet keeps root and password login on so you are not locked out. Each droplet gets its own known_hosts entry, because DigitalOcean reuses IP addresses.
 - **Volumes** are formatted on first boot, mounted under `/mnt/<volume name>` (DigitalOcean shows the name with underscores), and deleted with the droplet by `down`, `run` and the reaper. Volumes you attached yourself are left alone.
 - **Snapshots.** `dofleet bake NAME` keeps the newest `bake_keep` snapshots per preset and deletes older ones (snapshots bill per GB per month). `up --baked` skips the setup template, which already ran.
+
+## Security model
+
+- The token never leaves your machine, except into your own DigitalOcean Functions namespace if you install the Function reaper (`--token-env` lets that use a separate, narrower token).
+- Destructive commands only act on droplets tagged `dofleet` unless you name a droplet exactly or pass `--any`; `extend` refuses other droplets, because a timer would hand them to the reaper.
+- Files coming back from a droplet in `run` are unpacked with Python's tarfile `data` filter: no absolute paths, no `..`, no links pointing out, no device files.
+- SSH is trust-on-first-use with one known_hosts file per droplet, since DigitalOcean reuses IP addresses.
+- Known limit: the `desktop` password travels in the droplet's user data, which any process on that droplet can read from the metadata service. Change it after the first login if other people or containers share the box.
 
 ## Notes
 

@@ -3,7 +3,8 @@
 Every request goes through the policy in [mcp] of config.toml, enforced here and not by the agent:
 - presets: which presets the agent may use; max_ttl: longest timer it may set or extend to; max_droplets: how many
   dofleet droplets may exist at once; the month budget (`budget_usd`) applies as for the CLI.
-- the agent can only see, run commands on, extend or delete droplets that carry the `dofleet` tag.
+- the agent can only see, run commands on, extend or delete droplets it created itself (tag `dofleet-mcp`);
+  droplets a person made with `dofleet up` are invisible to it. `scope = "all"` widens that to every dofleet droplet.
 Speaks newline-delimited JSON-RPC 2.0 (MCP stdio transport); no SDK needed."""
 
 from __future__ import annotations
@@ -13,14 +14,15 @@ import subprocess
 import sys
 import time
 
-from . import __version__, fleet, launch, ops, ready, volumes
+from . import __version__, budget, fleet, launch, ops, ready, volumes
 from .api import ApiError, DOClient
 from .config import ConfigError, Settings
 from .i18n import t
 
 OUTPUT_LIMIT = 20_000
+AGENT_TAG = "dofleet-mcp"
 DEFAULT_POLICY = {"presets": ["tiny", "quick", "docker", "scratch"], "max_ttl": "4h", "max_droplets": 3,
-                  "exec_timeout_s": 600}
+                  "exec_timeout_s": 600, "scope": "own"}
 
 TOOLS = [
     {"name": "dofleet_list", "description": "List the dofleet droplets: name, IP, status, spend so far, time left.",
@@ -51,6 +53,10 @@ class Server:
         self.client, self.settings, self.run, self.now = client, settings, run, now
         self.policy = {**DEFAULT_POLICY, **(settings.data.get("mcp") or {})}
         self.max_ttl = fleet.parse_duration(self.policy["max_ttl"])
+        self.scope_tag = fleet.MARK_TAG if self.policy.get("scope") == "all" else AGENT_TAG
+
+    def _visible(self) -> list[dict]:
+        return [d for d in self.client.droplets(self.scope_tag) if fleet.is_managed(d)]
 
     # ---- policy helpers ---------------------------------------------------
     def _ttl(self, text: str | None) -> int:
@@ -60,14 +66,14 @@ class Server:
         return ttl
 
     def _mine(self, name: str) -> dict:
-        hits = [d for d in self.client.droplets(fleet.MARK_TAG) if d.get("name") == name or str(d.get("id")) == name]
+        hits = [d for d in self._visible() if d.get("name") == name or str(d.get("id")) == name]
         if not hits:
             raise Refused(t("mcp.not_found", name=name))
         return hits[0]
 
     # ---- tools ------------------------------------------------------------
     def dofleet_list(self, _):
-        return ops.rows(self.client.droplets(fleet.MARK_TAG), self.now())
+        return ops.rows(self._visible(), self.now())
 
     def dofleet_cost(self, _):
         c = ops.cost_summary(self.client, self.now())
@@ -79,11 +85,11 @@ class Server:
         preset = args.get("preset", "")
         if preset not in self.policy["presets"]:
             raise Refused(t("mcp.preset_denied", preset=preset, allowed=", ".join(self.policy["presets"])))
-        if len(self.client.droplets(fleet.MARK_TAG)) >= int(self.policy["max_droplets"]):
+        if len(self._visible()) >= int(self.policy["max_droplets"]):
             raise Refused(t("mcp.too_many", max=self.policy["max_droplets"]))
         ttl = self._ttl(args.get("ttl"))
         plan = ops.plan_up(self.client, self.settings, preset, args.get("name") or "agent", 1,
-                           ops.Overrides(ttl=f"{max(1, ttl // 60)}m"))
+                           ops.Overrides(ttl=f"{max(1, ttl // 60)}m", tags=[AGENT_TAG]))
         res = launch.create_and_wait(self.client, self.settings, plan)
         return [{"name": r["droplet"].get("name"), "ip": r["ip"], "state": r["state"],
                  "login_user": launch.login_user(self.settings, r["droplet"]),
@@ -107,6 +113,8 @@ class Server:
     def dofleet_extend(self, args):
         d = self._mine(args["name"])
         ttl = self._ttl(args["ttl"])
+        hourly, _ = fleet.prices(d)
+        budget.check_new(budget.status(self.client, self.settings, self.now()), hourly * ttl / 3600)
         ops.set_expiry(self.client, d, ttl, self.now(), from_now=True)
         return {"name": d["name"], "expires_in": fleet.format_duration(ttl)}
 
@@ -145,6 +153,8 @@ class Server:
         except (Refused, ConfigError, ApiError, ValueError) as e:
             text = t(e.key, **e.kw) if isinstance(e, ConfigError) else str(e)
             return {"content": [{"type": "text", "text": text}], "isError": True}
+        except Exception as e:  # noqa: BLE001 - one bad call (missing argument, network) must not end the server
+            return {"content": [{"type": "text", "text": f"{type(e).__name__}: {e}"}], "isError": True}
 
 
 def serve(client: DOClient, settings: Settings, stdin=sys.stdin, stdout=sys.stdout) -> None:

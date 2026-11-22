@@ -3,7 +3,8 @@
 Standalone on purpose: the Functions runtime has only the standard library. Rules match `dofleet reap`:
 - droplets tagged `dofleet` whose `dofleet-exp-<unix time>` (+ grace) has passed are deleted with their dofleet volumes;
 - when month-to-date usage has reached `budget_usd` and budget_action is "reap", every dofleet droplet is deleted;
-- dofleet volumes attached to nothing for over an hour are deleted.
+- dofleet volumes attached to nothing for over an hour are deleted ("since when" = a dofleet-detached-<time> tag
+  set the first time a run sees the volume detached, so a volume someone just moved by hand is not lost).
 Parameters (set at install): token, grace_s, budget_usd, budget_action, notify_url, dry_run."""
 
 import json
@@ -15,6 +16,7 @@ from datetime import datetime
 API = "https://api.digitalocean.com/v2"
 MARK = "dofleet"
 EXP = "dofleet-exp-"
+DETACHED = "dofleet-detached-"
 
 
 def http_caller(token):
@@ -66,18 +68,40 @@ def reap(call, now, grace_s=0, budget_usd=0.0, budget_action="reap", dry_run=Fal
     vols = [v for v in all_pages(call, "/volumes", "volumes") if MARK in (v.get("tags") or [])]
     owned = {v["id"] for v in vols}
     done, failed = [], []
+    budget_kill = over and budget_action == "reap"
     for d in doomed:
         if dry_run:
             done.append(d["name"])
             continue
+        if not budget_kill:  # re-read: it may have been extended since the list was taken
+            status, fresh = call("GET", f"/droplets/{d['id']}")
+            fresh = fresh.get("droplet") or {}
+            if status != 200 or expiry(fresh) is None or expiry(fresh) + grace_s > now:
+                continue
         attached = [v for v in d.get("volume_ids") or [] if v in owned]
         if attached:
             status, _ = call("DELETE", f"/droplets/{d['id']}/destroy_with_associated_resources/selective",
                              {"volumes": attached})
         else:
             status, _ = call("DELETE", f"/droplets/{d['id']}")
-        (done if status in (202, 204, 404) else failed).append(d["name"])
-    orphans = [v for v in vols if not v.get("droplet_ids") and now - stamp(v.get("created_at")) > 3600]
+        if status in (202, 204, 404):
+            done.append(d["name"])
+        elif status != 422:  # 422 = already being deleted (by the other reaper)
+            failed.append(d["name"])
+    orphans = []
+    for v in vols:
+        marks = [int(t[len(DETACHED):]) for t in v.get("tags") or [] if t.startswith(DETACHED) and t[len(DETACHED):].isdigit()]
+        if v.get("droplet_ids"):
+            for t in v.get("tags") or []:
+                if t.startswith(DETACHED) and not dry_run:
+                    call("DELETE", f"/tags/{t}/resources", {"resources": [{"resource_id": v["id"], "resource_type": "volume"}]})
+        elif not marks:
+            if not dry_run and now - stamp(v.get("created_at")) > 300:
+                tag = f"{DETACHED}{int(now)}"
+                call("POST", "/tags", {"name": tag})
+                call("POST", f"/tags/{tag}/resources", {"resources": [{"resource_id": v["id"], "resource_type": "volume"}]})
+        elif now - min(marks) > 3600:
+            orphans.append(v)
     for v in orphans:
         if not dry_run:
             call("DELETE", f"/volumes/{v['id']}")

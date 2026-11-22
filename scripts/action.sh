@@ -6,20 +6,26 @@ if [ -n "${DOFLEET_CONFIG_TEXT:-}" ]; then
   printf '%s\n' "$DOFLEET_CONFIG_TEXT" > "$DOFLEET_CONFIG"
 fi
 mkdir -p ~/.ssh && [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/id_ed25519
-read -r -a extra <<< "${DOFLEET_ARGS:-}"
+export DOFLEET_UPLOAD_KEY=always   # the runner's fresh key must reach the droplet even when the account has keys
+extra=()
+[ "$DOFLEET_CMD" = run ] || read -r -a extra <<< "${DOFLEET_ARGS:-}"
 out="$RUNNER_TEMP/dofleet.json"
 case "$DOFLEET_CMD" in
   up)   dofleet --json up "$DOFLEET_PRESET" -n "$DOFLEET_NAME" --ttl "$DOFLEET_TTL" --yes "${extra[@]}" > "$out" ;;
-  down) dofleet --json down "$DOFLEET_NAME" --yes "${extra[@]}" > "$out" || true ;;
-  run)  echo '{}' > "$out"; dofleet run "$DOFLEET_PRESET" -n "$DOFLEET_NAME" --ttl "$DOFLEET_TTL" --yes -- "${extra[@]}" ;;
+  down) dofleet --json down "$DOFLEET_NAME" --yes --missing-ok "${extra[@]}" > "$out" ;;
+  run)  echo '{}' > "$out"; dofleet run "$DOFLEET_PRESET" -n "$DOFLEET_NAME" --ttl "$DOFLEET_TTL" --yes -- bash -lc "$DOFLEET_ARGS" ;;
   reap) dofleet --json reap --yes > "$out" ;;
   *)    echo "unknown command: $DOFLEET_CMD" >&2; exit 2 ;;
 esac
-python3 - "$out" >> "$GITHUB_OUTPUT" <<'PY'
-import json, sys
+# fd 3 = the step's real stdout (workflow commands such as ::add-mask:: are read there); stdout goes to the outputs file
+python3 - "$out" 3>&1 >> "$GITHUB_OUTPUT" <<'PY'
+import json, os, sys
 text = open(sys.argv[1]).read()
 start = text.find("{")
 data = json.loads(text[start:]) if start >= 0 else {}
+password = (data.pop("generated", None) or {}).get("password") if isinstance(data, dict) else None
+if password:  # hide it from the log, and keep it out of the step outputs
+    os.write(3, f"::add-mask::{password}\n".encode())
 first = (data.get("droplets") or [{}])[0] if isinstance(data, dict) else {}
 first = first if isinstance(first, dict) else {"name": first}
 print(f"ip={first.get('ip') or ''}")

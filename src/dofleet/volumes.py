@@ -7,6 +7,8 @@ tag that someone attached by hand are left alone."""
 
 from __future__ import annotations
 
+import secrets
+
 from . import fleet
 from .api import ApiError, DOClient
 from .config import ConfigError
@@ -34,7 +36,8 @@ def create_for(client: DOClient, droplet_name: str, region: str, sizes: list[int
     made: list[str] = []
     try:
         for i, gb in enumerate(sizes, 1):
-            name = fleet.sanitize_name(f"{droplet_name}-v{i}").lower()[:64]
+            # random suffix: the previous run's volume of the same name may still be in asynchronous deletion
+            name = fleet.sanitize_name(f"{droplet_name}-v{i}-{secrets.token_hex(2)}").lower()[:64]
             made.append(client.create_volume(name, region, gb, [fleet.MARK_TAG])["id"])
     except ApiError:
         cleanup(client, made)

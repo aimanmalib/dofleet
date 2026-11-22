@@ -130,8 +130,10 @@ def test_reaper_function_logic():
     old = fd.add("old", tags=["dofleet", "dofleet-exp-100"])
     old["volume_ids"] = ["vol-1"]
     fd.vols["vol-1"] = {"id": "vol-1", "name": "old-v1", "tags": ["dofleet"], "droplet_ids": [old["id"]]}
-    fd.vols["vol-9"] = {"id": "vol-9", "name": "lost", "tags": ["dofleet"], "droplet_ids": [],
+    fd.vols["vol-9"] = {"id": "vol-9", "name": "lost", "tags": ["dofleet", "dofleet-detached-1000"], "droplet_ids": [],
                         "created_at": "2020-01-01T00:00:00Z"}
+    fd.vols["vol-8"] = {"id": "vol-8", "name": "moved-by-hand", "tags": ["dofleet"], "droplet_ids": [],
+                        "created_at": "2020-01-01T00:00:00Z"}  # old volume, detached just now: only gets marked
     fd.add("fresh", tags=["dofleet", f"dofleet-exp-{int(time.time()) + 999}"])
     fd.add("hand", tags=["dofleet-exp-1"])
     http = httpx.Client(transport=fd.transport(), base_url="https://api.digitalocean.com/v2")
@@ -143,7 +145,8 @@ def test_reaper_function_logic():
     assert dry["deleted"] == ["old"] and old["id"] in fd.droplets
     res = mod["reap"](call, time.time())
     assert res["deleted"] == ["old"] and res["orphan_volumes"] == ["lost"]
-    assert {d["name"] for d in fd.droplets.values()} == {"fresh", "hand"} and fd.vols == {}
+    assert {d["name"] for d in fd.droplets.values()} == {"fresh", "hand"} and list(fd.vols) == ["vol-8"]
+    assert any(t.startswith("dofleet-detached-") for t in fd.vols["vol-8"]["tags"])
     fd.usage = "99"
     res = mod["reap"](call, time.time(), budget_usd=50)
     assert res["over_budget"] and res["deleted"] == ["fresh"]
@@ -223,3 +226,75 @@ def test_mcp_stdio_loop(fake):
     replies = [json.loads(x) for x in out.getvalue().splitlines()]
     assert [r.get("id") for r in replies] == [1, 2, 3, None]
     assert replies[2]["error"]["code"] == -32601 and replies[3]["error"]["code"] == -32700
+
+
+def test_download_refuses_hostile_tar(tmp_path, monkeypatch):
+    """A tampered droplet sends a tar that tries to escape the output folder."""
+    import tarfile as tf
+    evil = tmp_path / "evil.tgz"
+    with tf.open(evil, "w:gz") as t:
+        data = tmp_path / "x"
+        data.write_text("pwned")
+        t.add(data, arcname="../../escaped.txt")
+    monkeypatch.setattr(runjob, "_ssh", lambda *a: ["bash", "-c", f"cat {evil}; true"])
+    dest = tmp_path / "out" / "run"
+    with pytest.raises(runjob.JobError):
+        runjob.download(1, "ip", "u", None, ["anything"], dest)
+    assert not (tmp_path / "escaped.txt").exists()
+
+
+def test_env_key_validated():
+    with pytest.raises(runjob.JobError):
+        runjob.execute(1, "ip", "u", None, ["true"], {"A;rm -rf ~": "1"})
+
+
+def test_every_to_cron():
+    assert faas.every_to_cron(600) == "*/10 * * * *" and faas.every_to_cron(7200) == "0 */2 * * *"
+    assert faas.every_to_cron(86400) == "0 0 * * *"
+    from dofleet.config import ConfigError
+    for bad in (420, 2 * 86400, 5 * 3600):
+        with pytest.raises(ConfigError):
+            faas.every_to_cron(bad)
+
+
+def test_extend_never_touches_foreign_droplets(fake):
+    prod = fake.add("web-prod")
+    mine = fake.add("web-01", tags=["dofleet", "dofleet-exp-100"])
+    for pattern in ("web*", "web-prod"):
+        invoke("--json", "extend", pattern, "--ttl", "2h")
+    assert prod["tags"] == [] and any(t.startswith("dofleet-exp-") and t != "dofleet-exp-100" for t in mine["tags"])
+
+
+def test_mcp_cannot_see_human_droplets(fake):
+    from dofleet import config
+    human = fake.add("db", tags=["dofleet"])
+    server = mcp_server.Server(cli.S._client, config.load(fake.cfg))
+    for tool, args in (("dofleet_delete", {"name": "db"}), ("dofleet_extend", {"name": "db", "ttl": "1m"}),
+                       ("dofleet_exec", {"name": "db", "command": "id"})):
+        assert server.call(tool, args)["isError"], tool
+    assert human["id"] in fake.droplets and json.loads(server.call("dofleet_list", {})["content"][0]["text"]) == []
+    assert server.call("dofleet_exec", {})["isError"]  # missing arguments: an error reply, not a crash
+
+
+def test_budget_counts_running_droplets(fake):
+    fake.usage = "0"
+    fake.cfg.write_text("[defaults]\nbudget_usd = 10\n")
+    fake.add("big", tags=["dofleet"], created="2099-01-01T00:00:00Z",
+             size={**SIZES[2], "price_hourly": 1.0, "price_monthly": 500})  # no timer: runs to month end
+    r = invoke("--json", "up", "tiny", "--ttl", "1h", "--yes", "--no-wait")
+    assert r.exit_code != 0 and fake.created_bodies == []
+
+
+def test_orphan_volume_needs_an_hour_detached(fake):
+    fake.vols["v1"] = {"id": "v1", "name": "moved", "tags": ["dofleet"], "droplet_ids": [],
+                       "created_at": "2020-01-01T00:00:00Z", "size_gigabytes": 10}
+    invoke("--json", "reap", "--yes")
+    assert "v1" in fake.vols and any(t.startswith("dofleet-detached-") for t in fake.vols["v1"]["tags"])
+    fake.vols["v1"]["tags"] = ["dofleet", f"dofleet-detached-{int(time.time()) - 7200}"]
+    invoke("--json", "reap", "--yes")
+    assert fake.vols == {}
+
+
+def test_down_missing_ok(fake):
+    assert invoke("--json", "down", "pr-7", "--yes", "--missing-ok").exit_code == 0
+    assert invoke("down", "pr-7", "--yes").exit_code == 1

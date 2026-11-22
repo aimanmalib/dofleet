@@ -42,11 +42,12 @@ def run(preset: str = typer.Argument(..., help="Preset to boot"),
     if not confirm(t("up.confirm", n=1), yes):
         raise typer.Exit(1)
     started = time.time()
-    res = {}
+    res: dict = {}
+    made: list[dict] = []
     rc = 1
     try:
         with con.status(t("run.booting")):
-            res = launch.create_and_wait(client, S.settings, plan)
+            res = launch.create_and_wait(client, S.settings, plan, on_created=made.extend)
         r = next(iter(res.values()))
         if r["state"] != "ready":
             err.print(f"[red]{t('run.not_ready', state=t('state.' + r['state']))}[/]")
@@ -66,15 +67,16 @@ def run(preset: str = typer.Argument(..., help="Preset to boot"),
         err.print(f"[red]{t(e.key, **e.kw)}[/]")
     finally:
         keep_it = keep or (keep_on_fail and rc != 0)
-        for r in res.values():
+        for d in made:  # everything that was created, even if waiting failed half way
+            r = res.get(d["id"]) or {"droplet": d, "ip": None}
             if keep_it:
-                say(t("run.kept", name=r["droplet"].get("name"), ip=r["ip"]))
+                say(t("run.kept", name=d.get("name"), ip=r["ip"]))
             else:
-                volumes.destroy(client, r["droplet"])
+                volumes.destroy(client, client.droplet(d["id"]))
         spent = plan.size.get("price_hourly", 0) * max(1 / 60, (time.time() - started) / 3600)
         say(t("run.done", rc=rc, mins=f"{(time.time() - started) / 60:.1f}", cost=money(float(spent))))
     if S.as_json:
-        out_json({"exit_code": rc, "droplets": [r["droplet"].get("name") for r in res.values()]})
+        out_json({"exit_code": rc, "droplets": [d.get("name") for d in made]})
     raise typer.Exit(rc)
 
 
@@ -112,8 +114,7 @@ def install_reaper(region: Optional[str] = typer.Option(None, "--region", help="
                                                            help="Env var with a separate token for the reaper"),
                    notify_url: str = typer.Option("", "--notify-url", help="Webhook (Slack/Discord style) for reports"),
                    yes: bool = typer.Option(False, "--yes", "-y")):
-    secs = fleet.parse_duration(every)
-    cron = f"*/{secs // 60} * * * *" if secs < 3600 else f"0 */{max(1, secs // 3600)} * * *"
+    cron = faas.every_to_cron(fleet.parse_duration(every))
     token = os.environ.get(token_env, "") if token_env else S.settings.token(S.profile)[0]
     if not token:
         err.print(f"[red]{t('err.no_token', profile=token_env, envs=token_env)}[/]")

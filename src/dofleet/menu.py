@@ -43,7 +43,7 @@ def _run(cli, choice: str) -> None:
         cli.extend(patterns=[target], ttl=typer.prompt(t("menu.ttl"), default="2h"), keep=False)
     elif choice == "4":
         cli.ls(managed=False)
-        cli.down(patterns=typer.prompt(t("menu.target")).split(), yes=False)
+        cli.down(patterns=typer.prompt(t("menu.target")).split(), yes=False, any_droplet=False, missing_ok=False)
     elif choice == "5":
         cli.reap(yes=False, dry_run=False)
     elif choice == "6":
