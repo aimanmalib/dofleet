@@ -1,0 +1,37 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.aimanmalib/dofleet",
+  "title": "dofleet",
+  "description": "Let AI agents borrow DigitalOcean droplets with expiry timers and a budget, never your token.",
+  "repository": {
+    "url": "https://github.com/aimanmalib/dofleet",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "dofleet",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "DIGITALOCEAN_TOKEN",
+          "description": "DigitalOcean API token. dofleet keeps it; the agent never sees it.",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

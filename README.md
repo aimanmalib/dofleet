@@ -5,6 +5,8 @@
   </picture>
 </p>
 
+<!-- mcp-name: io.github.aimanmalib/dofleet -->
+
 <p align="center">
   <a href="https://github.com/aimanmalib/dofleet/actions/workflows/ci.yml"><img alt="tests" src="https://github.com/aimanmalib/dofleet/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-0E2A3D">
