@@ -131,8 +131,13 @@ def test_locales_complete_and_formatting():
 
 
 def test_lang_resolve(monkeypatch):
-    monkeypatch.delenv("DOFLEET_LANG", raising=False)
+    for e in ("DOFLEET_LANG", "LC_ALL", "LC_MESSAGES"):
+        monkeypatch.delenv(e, raising=False)
     monkeypatch.setenv("LANG", "ms_MY.UTF-8")
     assert i18n.resolve() == "ms"
+    monkeypatch.setenv("LC_ALL", "C.UTF-8")  # C locale says nothing about language, LANG still counts
+    assert i18n.resolve() == "ms"
+    monkeypatch.setenv("LC_ALL", "en_US.UTF-8")
+    assert i18n.resolve() == "en"
     assert i18n.resolve("en") == "en"
     assert i18n.resolve(None, "fr") == "en"

@@ -20,8 +20,11 @@ def resolve(explicit: str | None = None, configured: str | None = None) -> str:
     for cand in (explicit, os.environ.get("DOFLEET_LANG"), configured):
         if cand and cand != "auto":
             return cand if cand in SUPPORTED else "en"
-    sys_lang = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or "").lower()
-    return "ms" if sys_lang.startswith(("ms", "my_")) else "en"
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        value = (os.environ.get(var) or "").lower()
+        if value and value not in ("c", "posix") and not value.startswith("c."):  # C/POSIX = no preference
+            return "ms" if value.startswith("ms") else "en"
+    return "en"
 
 
 def set_lang(lang: str) -> None:
