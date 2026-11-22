@@ -7,5 +7,7 @@ account (02-DECISIONS.md D7, D9, D10). Operator notes for the author's own serve
    (`io.github.aimanmalib/dofleet`, active). Next release: bump version in pyproject.toml AND server.json (both places), then
    `gh release create vX.Y.Z` → release.yml does PyPI + registry.
 2. After PyPI is live: PR to punkpeye/awesome-mcp-servers; run the GitHub Action once for real (`uses: aimanmalib/dofleet@main`).
-3. Recognition: Write for DOnations pitch (topic idea: "Never pay for a forgotten droplet again", built on `run` + budget + reaper).
-4. Not yet verified: a graphical RDP session to `desktop`; GPU presets on an account with GPU access.
+3. Launch video (sources private, ~/dofleet-media/brag: brag-plan.md, garis.json, kongsi.txt captions): rendered 23 Nov;
+   owner picks the 'dofleet' pronunciation (FILE DROP samples A/B/C), then regenerate lines reveal + tutup and re-render.
+4. Recognition: Write for DOnations pitch (topic idea: "Never pay for a forgotten droplet again", built on `run` + budget + reaper).
+5. Not yet verified: a graphical RDP session to `desktop`; GPU presets on an account with GPU access.
