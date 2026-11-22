@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (23 Nov 2026)
 
 First version. Rewritten from scratch; it shares no code with the private scripts it replaces.
 
