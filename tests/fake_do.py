@@ -80,7 +80,8 @@ class FakeDO:
             return httpx.Response(200, json={"account": {"email": "a@example.com", "status": "active", "droplet_limit": 10}})
         if m == "GET" and path == "/customers/my/balance":
             return httpx.Response(200, json={"month_to_date_balance": self.usage, "account_balance": "0.00",
-                                             "month_to_date_usage": self.usage})
+                                             "month_to_date_usage": self.usage,
+                                             "generated_at": "2026-01-01T00:00:00Z"})
         if m == "GET" and path == "/snapshots":
             return httpx.Response(200, json=self._page(req, "snapshots", self.snaps))
         if m == "DELETE" and (mm := re.fullmatch(r"/snapshots/(\d+)", path)):

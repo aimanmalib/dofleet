@@ -146,5 +146,6 @@
  "err.size_unknown": "None of these sizes is offered to this account: {sizes}. GPU sizes need GPU access on the account first.",
  "err.faas_every": "--every must divide an hour or a day evenly: 5m, 10m, 15m, 30m, 1h, 2h, 6h, 12h or 1d.",
  "extend.foreign": "Not changed (not made by dofleet; a timer would hand it to the reaper): {names}",
- "err.run_env_key": "--env name '{name}' is not a valid variable name."
+ "err.run_env_key": "--env name '{name}' is not a valid variable name.",
+ "cost.stale": "DigitalOcean's usage figure is {hours} h old; it refreshes a few times a day, so the budget check lags too."
 }

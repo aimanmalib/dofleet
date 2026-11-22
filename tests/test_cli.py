@@ -135,7 +135,7 @@ def test_ls_and_cost(fake):
     assert [r["name"] for r in managed] == ["old"]
     c = json.loads(run("--json", "cost").output)
     assert c["droplets"] == 3 and c["fleet_monthly"] == 18.0 and c["without_timer"] == 2
-    assert c["month_to_date_usage"] == 12.5
+    assert c["month_to_date_usage"] == 12.5 and c["usage_age_h"] > 24  # stale figure is reported, not hidden
 
 
 def test_reap_only_expired_managed(fake):

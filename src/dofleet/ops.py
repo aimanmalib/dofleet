@@ -308,6 +308,10 @@ def cost_summary(client: DOClient, now: float) -> dict:
     orphans = orphan_volumes(client, now)
     return {
         "month_to_date_usage": float(bal.get("month_to_date_usage") or 0),
+        # DigitalOcean refreshes this figure a few times a day (measured 23 Nov 2026: 19 hours old)
+        "usage_as_of": bal.get("generated_at"),
+        "usage_age_h": round((now - fleet.created_ts({"created_at": bal["generated_at"]})) / 3600, 1)
+        if bal.get("generated_at") else None,
         "month_to_date_balance": float(bal.get("month_to_date_balance") or 0),
         "account_balance": float(bal.get("account_balance") or 0),
         "droplets": len(ds),

@@ -101,7 +101,7 @@ budget_usd = 50          # this month's DigitalOcean usage ceiling
 budget_action = "reap"   # at the ceiling: "reap" deletes every dofleet droplet, "warn" only reports
 ```
 
-`up`, `run` and agent requests refuse anything that would pass the ceiling: usage so far, plus what running droplets will still cost until their timers (or month end without one), plus the new batch. A sold-out fallback to a dearer size is checked again. The reaper applies `budget_action` once usage reaches it. Sizes listed in `require_ttl_for` (GPU by default) cannot be created without a timer.
+`up`, `run` and agent requests refuse anything that would pass the ceiling: usage so far, plus what running droplets will still cost until their timers (or month end without one), plus the new batch. A sold-out fallback to a dearer size is checked again. The reaper applies `budget_action` once usage reaches it. DigitalOcean refreshes the month-to-date figure only a few times a day (measured: 19 hours old), so treat the budget as a guard against runaway spend, not a real-time meter; the cost of droplets still running is counted live. `dofleet cost` shows how old the figure is. Sizes listed in `require_ttl_for` (GPU by default) cannot be created without a timer.
 
 ## Jobs with `run`
 

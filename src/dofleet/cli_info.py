@@ -57,6 +57,8 @@ def cost():
     if st.on:
         tb.add_row(t("plan.budget"), t("cost.budget_v", used=money(st.used), budget=money(st.budget), left=money(st.left)))
     con.print(tb)
+    if (c.get("usage_age_h") or 0) >= 1:
+        con.print(f"[dim]{t('cost.stale', hours=c['usage_age_h'])}[/]")
     if c["orphan_volumes"]:
         con.print(f"[yellow]{t('cost.orphans', n=len(c['orphan_volumes']), gb=c['orphan_volume_gb'], names=', '.join(c['orphan_volumes']))}[/]")
     if c["without_timer"]:

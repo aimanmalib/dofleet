@@ -98,3 +98,10 @@ The owner asked why the header did not match the author's other projects (mypii)
 (112 px, PNG 512 with a dark-theme variant), `<h1>`, one badge row (CI, PyPI, MCP Registry, licence), a bold English tagline with the
 Malay one in italics, and a credit line. The wide banners stay in `assets/` but are no longer used by the README. The PyPI page
 picks up the new header with the next release.
+
+## D13 (23 Nov 2026): the budget check is only as fresh as DigitalOcean's usage figure
+While recording the launch video, `budget_usd = 1.20` did not block a `quick` batch: `/customers/my/balance` reported 1.14 earlier
+and 0.00 minutes later, with `generated_at` 19 hours old. dofleet trusted the figure it was given, so the droplet was created
+(deleted within 3 minutes). Not fixable on our side: there is no fresher source for month-to-date usage. Changes: README says the
+budget is a guard, not a real-time meter; `cost` prints the age of the figure when it is over an hour old (`usage_age_h` in JSON).
+Committed spend of running droplets (D10) is still computed live, which is what actually stops a runaway batch.
