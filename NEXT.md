@@ -1,15 +1,11 @@
 # NEXT (start here)
 
-State: feature complete for a first release (D7 + D9 in 02-DECISIONS.md, every feature run on a live account 23 Nov 2026).
-Private repo, not on PyPI. The host runs `reap` from cron and the account also has the Functions reaper (`dofleet` namespace, sgp1, every 10 min).
+State: feature complete for a first release. Every feature was run against a live account on 23 Nov 2026 (02-DECISIONS.md D7, D9, D10).
+Not on PyPI yet. Operator notes for the author's own server (token, cron, drill preset) live outside this repo.
 
-1. Owner decision: make the repo public (aimanmalib or sasateguh), then `gilap topik` + tag `digitalocean-community-tools`.
-   The GitHub Action (`uses: aimanmalib/dofleet@main`) only works once the repo is public; test it there first.
-2. Publish to PyPI (name `dofleet` was free on 23 Nov 2026). README images are relative; the build rewrites them to absolute
-   URLs for PyPI (hatch-fancy-pypi-readme), so they only work on PyPI once the repo is public.
-   Right after going public (a session, not the owner): upload `assets/social.png` as Social preview through `pandu`
-   (Settings -> Social preview; the section does not exist while the repo is private, measured 23 Nov).
-3. Owner: replace the host token (drill token from 20 Nov) with a scoped one, then `dofleet install-reaper --every 10m`
-   again so the Function gets the new token.
-4. Recognition: Write for DOnations pitch, e.g. "Never pay for a forgotten droplet again" built on `run` + budget + reaper.
-5. Not yet verified: a graphical RDP session to `desktop`; GPU presets on an account with GPU access.
+1. Publish: make the repo public, tag `v0.1.0`, release to PyPI with Trusted Publishing (name `dofleet` was free on 23 Nov 2026).
+   README images are relative; the build rewrites them to absolute URLs for PyPI, so they work there once the repo is public.
+2. After going public: Social preview = `assets/social.png` (GitHub shows that setting for public repos only); add a CI badge
+   for `.github/workflows/ci.yml`; run the GitHub Action once for real (`uses: <owner>/dofleet@main`).
+3. Recognition: tag `digitalocean-community-tools` (done), pitch a Write for DOnations tutorial built on `run` + budget + reaper.
+4. Not yet verified: a graphical RDP session to `desktop`; GPU presets on an account with GPU access.

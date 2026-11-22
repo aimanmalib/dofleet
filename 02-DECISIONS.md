@@ -45,9 +45,9 @@ Verified on the droplet: cloud-init `done`, sudo without password, ufw active, f
 password login refused, root by key works; desktop: xrdp active, 3389 reachable, generated password matches /etc/shadow and is
 not in cloud-init-output.log; volume mounted at `/mnt/<name>`. Not verified: a full graphical RDP session.
 
-## D8: host integration
-`~/ops/dofleet` runs `reap` every 10 minutes on the host and holds the `gerudi` preset for the disaster-recovery drill
-(`~/ops/jaring/PULIH-BENCANA.md`). That lives outside this repo on purpose: the tool stays generic.
+## D8: the author's own setup stays out of this repo
+The author runs `reap` from cron on a server and keeps a private preset for a disaster-recovery drill (a box with two 100 GB
+volumes). Those live in a separate private config, not here, so the tool and its defaults stay generic.
 
 ## D9 (23 Nov 2026): run, budget, Functions reaper, MCP, bake, GitHub Action, GPU rule
 All seven were exercised on the live account the same day:

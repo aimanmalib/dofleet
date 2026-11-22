@@ -70,7 +70,7 @@ Python 3.11 or newer, plus `ssh` and `tar` for `run`. Until the first PyPI relea
 
 ## Token
 
-Create a token at <https://cloud.digitalocean.com/account/api/tokens> (custom scopes: droplet, volume, ssh_key, tag, snapshot, function, account read, billing read), then `export DIGITALOCEAN_TOKEN=dop_v1_...`, or keep using an existing `doctl auth init` login. `dofleet whoami` shows the account and where the token came from. More than one account: add profiles to the config and pass `-p <profile>`.
+Create a token at <https://cloud.digitalocean.com/account/api/tokens> (custom scopes, checked against [DigitalOcean's scope list](https://docs.digitalocean.com/reference/api/scopes/): full `droplet`, `block_storage`, `ssh_key`, `tag`, `snapshot` and `function`, plus `actions:read`, `account:read`, `billing:read`, `sizes:read`, `regions:read` and `image:read`; or simply read + write), then `export DIGITALOCEAN_TOKEN=dop_v1_...`, or keep using an existing `doctl auth init` login. `dofleet whoami` shows the account and where the token came from. More than one account: add profiles to the config and pass `-p <profile>`.
 
 ## Commands
 
