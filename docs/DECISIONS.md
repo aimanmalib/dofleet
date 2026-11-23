@@ -1,10 +1,12 @@
-# Decisions
+# Design decisions
 
-## D1 (23 Nov 2026): rewrite, not a cleanup of do-manager
-The old private `aimanmalib/do-manager` was a menu around the same calls `doctl` already makes, plus a Windows RDP
-script and unrelated files (a TikTok view bot, a baked-in password, PyInstaller .exe files). Cleaning it up would still
-leave a weaker doctl. Owner asked for a new repo with new behaviour. The new tool targets one job doctl does not do:
-short-lived droplets that get deleted on time. No code or history is carried over; the old repo stays private.
+Why dofleet works the way it does, and what testing it against a live DigitalOcean account changed. The numbers
+match the changelog, the tests and the commit messages.
+
+## D1 (23 Nov 2026): a new tool, not a cleanup
+dofleet replaces a set of private scripts that wrapped the same calls `doctl` already makes. Cleaning those up would still have
+left a weaker doctl, so dofleet was written from scratch around one job doctl does not do: short-lived droplets that get
+deleted on time. It shares no code or history with the old scripts.
 
 ## D2: expiry lives in DigitalOcean tags, not a local database
 `dofleet` + `dofleet-exp-<unix time>`. Any machine with the token can reap; nothing to lose if the laptop dies.
@@ -19,12 +21,12 @@ dofleet uses about 15 endpoints. A thin client keeps the install small and lets 
 Composable with `#include`, readable by anyone, no YAML dependency. cloud-init runs a `#!/bin/bash` user_data as-is.
 Placeholder values are limited to a safe character set because they are pasted into shell.
 
-## D5: owner's fixed values
+## D5: design rules
 1. Bilingual: every user-facing string in `locales/en.json` + `locales/ms.json`; a test fails when keys or placeholders differ.
 2. Product-grade UX: menu for non-CLI users, plan + cost shown before anything is created, typed confirmation above a cost limit.
 3. Change without code: presets, fallback chains, timers, limits and language live in `data/presets.toml`,
    overridden by the user's `config.toml`; setup scripts are files.
-4. Small modules (each under 400 lines), decisions here, undo noted per decision.
+4. Small modules (each under 400 lines), decisions recorded, undo noted per decision.
 
 ## D6: region order beats size order in fallback
 A user who asks for Singapore would rather get the AMD twin in Singapore than the basic size in Bangalore.
@@ -55,7 +57,7 @@ All seven were exercised on the live account the same day:
   run seconds after a key upload got 422 "already in use" because the key list lags; keys are now looked up by MD5
   fingerprint (`GET /account/keys/<fp>`), which matched `ssh-keygen -E md5`.
 - budget: `budget_usd = 0.001` refused the create before any API write.
-- Functions reaper: namespace + python:3.12 action + SCHEDULED trigger. A droplet with a 1 min timer was deleted by the
+- Functions reaper: namespace + python:3.12 action + `SCHEDULED` trigger. A droplet with a 1 min timer was deleted by the
   Function at 21:15:47 while the host cron had last run at 21:10, so the Function did it. The namespace key is only
   returned on create, so install deletes and recreates the `dofleet` namespace (idempotent). The reaper code is a
   standalone stdlib file because the runtime has nothing else.
@@ -93,11 +95,10 @@ Mark = a droplet holding a countdown ring; the amber dot marks time already gone
 fonts inside SVG. `scripts/make-assets.py` rebuilds banner-{light,dark}.svg and social.png. The demo GIF is a real recording
 (asciinema + agg), with spinner time compressed; nothing in it is staged.
 
-## D12 (23 Nov 2026): README header follows the house format
-The owner asked why the header did not match the author's other projects (mypii). It now uses the same layout: square logo
-(112 px, PNG 512 with a dark-theme variant), `<h1>`, one badge row (CI, PyPI, MCP Registry, licence), a bold English tagline with the
-Malay one in italics, and a credit line. The wide banners stay in `assets/` but are no longer used by the README. The PyPI page
-picks up the new header with the next release.
+## D12 (23 Nov 2026): README header
+One square logo (112 px, PNG 512 with a dark-theme variant), an `<h1>`, one badge row, a bold English tagline with the Malay
+one in italics, and a credit line, the same layout as the author's other projects. The wide banners stay in `assets/`.
+The PyPI page picks up a header change with the next release.
 
 ## D13 (23 Nov 2026): the budget check is only as fresh as DigitalOcean's usage figure
 While recording the launch video, `budget_usd = 1.20` did not block a `quick` batch: `/customers/my/balance` reported 1.14 earlier

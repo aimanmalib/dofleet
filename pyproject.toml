@@ -56,7 +56,7 @@ path = "README.md"
 pattern = '(src|srcset)="assets/'
 replacement = '\1="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/'
 
-# Links to other repo files (README.ms.md, 02-DECISIONS.md, ...) point at GitHub; #anchors work on PyPI as they are.
+# Links to other repo files (README.ms.md, docs/DECISIONS.md, ...) point at GitHub; #anchors work on PyPI as they are.
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = 'href="(?!https?://|#|mailto:)([^"]+)"'
 replacement = 'href="https://github.com/aimanmalib/dofleet/blob/main/\1"'

@@ -38,6 +38,6 @@ First version. Rewritten from scratch; it shares no code with the private script
 - `gpu` preset; per-droplet known_hosts (DigitalOcean reuses IPs); SSH key looked up by fingerprint
 - Logo, light/dark banner, social preview, real demo GIF in the README; security model section
 - Second red team: extend/MCP scoping, detached-volume clock, committed spend in the budget, reaper re-check before delete,
-  new-before-old reaper install, safe tar extraction, Action input hardening (02-DECISIONS.md D10)
+  new-before-old reaper install, safe tar extraction, Action input hardening (design decisions, D10)
 - Safety: glob patterns in `down` skip droplets dofleet did not make (`--any` to include); create is never retried after 5xx;
   `reap` keeps going when one delete fails and treats 404 as done; `notify_cmd` hook

@@ -210,7 +210,7 @@ A key you set overrides the bundled one; everything else stays as shipped.
 - Costs shown are estimates from list prices. Backups, snapshots and bandwidth overage are not included. `dofleet cost` shows the real month-to-date figure.
 - A create request is never retried after a server error, because DigitalOcean may already have made the droplets. Reads and deletes are retried with backoff.
 - Volume deletion and some listings settle on DigitalOcean's side a minute or two after the call returns.
-- What was tested against a live account, and what changed because of it, is in [02-DECISIONS.md](02-DECISIONS.md).
+- What was tested against a live account, and what changed because of it, is in the [design decisions](docs/DECISIONS.md).
 
 ## Development
 
@@ -224,3 +224,11 @@ The tests run against an in-memory fake of the DigitalOcean API and never touch 
 ## License
 
 MIT. Made by [Aiman Malib](https://github.com/aimanmalib) at [Sasa Teguh](https://sasateguh.com).
+
+## Work with Sasa Teguh
+
+[![Work with Sasa Teguh: book a call](https://raw.githubusercontent.com/sasateguh/.github/main/assets/work-with-sasa-teguh.png)](https://sasateguh.com/book)
+
+I built this project. I run [Sasa Teguh](https://sasateguh.com), a studio in Malaysia that builds websites found on Google and in AI answers, and sets up systems like this one for businesses.
+
+[Book a call](https://sasateguh.com/book) · hello@sasateguh.com · [More from Sasa Teguh](https://github.com/sasateguh)

@@ -1,4 +1,4 @@
-"""Reap removes the empty timer tags each droplet leaves behind, and nothing else (02-DECISIONS.md D15).
+"""Reap removes the empty timer tags each droplet leaves behind, and nothing else (docs/DECISIONS.md D15).
 
 DigitalOcean keeps a tag after the last resource carrying it is gone, so every droplet used to leave one
 `dofleet-exp-<time>` tag in the account for good.
