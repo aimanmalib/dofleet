@@ -1,3 +1,0 @@
-- P1 SIAP: komit 18c2731, gerbang hijau (62 lulus), klon bersih lulus.
-- Seterusnya: P2 di hos (config notify_cmd).
-- Tiada halangan.
