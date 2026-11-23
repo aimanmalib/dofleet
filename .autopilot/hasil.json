@@ -1,0 +1,4 @@
+{"status": "SIAP", "potongan": "P1 tahap notifikasi reap (kod + ujian + docs)",
+ "komit": ["18c2731"], "deploy": [],
+ "ringkasan": "Pemadaman rutin droplet yang pemasanya tamat kini dihantar sebagai makluman biasa (bukan amaran merah), padam kerana bajet sebagai amaran, dan padam yang gagal kini sebagai amaran kritikal (dahulu senyap). Mesej juga menyatakan sebab dan apa perlu dibuat. Langkah seterusnya (tukar tetapan di pelayan) dibuat di pelayan.",
+ "sebab": "", "gambar": [], "pilihan": []}

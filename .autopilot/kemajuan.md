@@ -1,3 +1,3 @@
-- P1 code + tests + docs done, gate green (62 passed).
-- Now: commit, push to main, write hasil.json.
-- No blockers. P2 is a host slice.
+- P1 SIAP: komit 18c2731, gerbang hijau (62 lulus), klon bersih lulus.
+- Seterusnya: P2 di hos (config notify_cmd).
+- Tiada halangan.
