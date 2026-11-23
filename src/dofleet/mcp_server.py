@@ -48,12 +48,44 @@ class Refused(Exception):
     pass
 
 
+class MissingToken:
+    """Stands in for the API client when no token is set. The server still starts and lists its tools (MCP clients and
+    directories inspect it that way); every tool call then answers with the same "no token" error the CLI prints."""
+
+    def __init__(self, error: ConfigError):
+        self.error = error
+
+    def __getattr__(self, name):
+        raise self.error
+
+
 class Server:
     def __init__(self, client: DOClient, settings: Settings, *, run=subprocess.run, now=time.time):
         self.client, self.settings, self.run, self.now = client, settings, run, now
         self.policy = {**DEFAULT_POLICY, **(settings.data.get("mcp") or {})}
         self.max_ttl = fleet.parse_duration(self.policy["max_ttl"])
         self.scope_tag = fleet.MARK_TAG if self.policy.get("scope") == "all" else AGENT_TAG
+
+    def tools(self) -> list[dict]:
+        """TOOLS with this policy written into the argument descriptions, so an agent knows its limits up front."""
+        p = self.policy
+        hints = {
+            "dofleet_create": {"preset": f"Preset to use. Allowed: {', '.join(p['presets'])}.",
+                               "name": "Name prefix for the droplet (optional).",
+                               "ttl": f"Timer, e.g. 30m or 2h. At most {p['max_ttl']}, which is also the default."},
+            "dofleet_exec": {"name": "A droplet you created (see dofleet_list).",
+                             "command": "Shell command, run as the preset's login user.",
+                             "timeout_s": f"Seconds to wait, at most {p['exec_timeout_s']}."},
+            "dofleet_extend": {"name": "A droplet you created.",
+                               "ttl": f"New timer counted from now, e.g. 1h. At most {p['max_ttl']}."},
+            "dofleet_delete": {"name": "A droplet you created."},
+        }
+        out = json.loads(json.dumps(TOOLS))
+        for tool in out:
+            for arg, schema in tool["inputSchema"]["properties"].items():
+                if arg in hints.get(tool["name"], {}):
+                    schema["description"] = hints[tool["name"]][arg]
+        return out
 
     def _visible(self) -> list[dict]:
         return [d for d in self.client.droplets(self.scope_tag) if fleet.is_managed(d)]
@@ -135,7 +167,7 @@ class Server:
         elif method == "ping":
             result = {}
         elif method == "tools/list":
-            result = {"tools": TOOLS}
+            result = {"tools": self.tools()}
         elif method == "tools/call":
             params = msg.get("params") or {}
             result = self.call(params.get("name", ""), params.get("arguments") or {})

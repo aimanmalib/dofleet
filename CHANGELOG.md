@@ -9,6 +9,11 @@
 - `notify_cmd` can carry `{message}` and `{level}` placeholders. `reap` sends `info` for droplets whose timer ran out,
   `warn` for droplets deleted because the month budget was reached, and `critical` when a delete fails (a failed delete
   used to send nothing). Messages now say why it happened and what to do. Configs without placeholders work as before.
+- GitHub Action: it failed to load on GitHub ("Unrecognized named-value: 'github'") because an input description held
+  an expression; fixed and run for real (up, outputs, down, run). The runner's SSH key no longer stays on the account
+  after each run (it was one key per job); a key that was there before the step is left alone.
+- `dofleet mcp` starts without a token, so MCP clients and directories can list its tools; each tool call then reports
+  the missing token. Tool arguments now have descriptions that include the policy (allowed presets, longest timer).
 - `dofleet cost` says how old DigitalOcean's month-to-date figure is when it is over an hour old (`usage_age_h` in JSON).
 - PyPI page: links to other repo files point at GitHub, project links (issues, changelog), Python version classifiers.
 

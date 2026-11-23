@@ -128,7 +128,7 @@ Add dofleet to an MCP client, for example Claude Code's `.mcp.json`:
     "env": { "DIGITALOCEAN_TOKEN": "dop_v1_..." } } } }
 ```
 
-The agent gets six tools: `dofleet_list`, `dofleet_create`, `dofleet_exec`, `dofleet_extend`, `dofleet_delete`, `dofleet_cost`. The policy is enforced by dofleet, not by the agent:
+The agent gets six tools: `dofleet_list`, `dofleet_create`, `dofleet_exec`, `dofleet_extend`, `dofleet_delete`, `dofleet_cost`. Their argument descriptions carry your limits (allowed presets, longest timer), so the agent knows them before it asks. The server starts without a token too, so clients can list the tools; each call then says the token is missing. The policy is enforced by dofleet, not by the agent:
 
 ```toml
 [mcp]
@@ -160,7 +160,7 @@ jobs:
       - run: echo "Preview at http://${{ steps.box.outputs.ip }}"
 ```
 
-For anything that matters, pin a release tag or a commit SHA instead of `@main`. Delete the droplet when the pull request closes with `command: down` and the same `name` (a droplet that is already gone is not an error); if that never runs, the timer does it. `command: run` takes `args` as one shell command, pipes and `&&` included. `config` takes a config file's contents (presets, budget). The runner's SSH key is added to the account automatically, inputs reach the shell only as environment variables, and a generated password is masked in the log and left out of the step outputs.
+For anything that matters, pin a release tag or a commit SHA instead of `@main`. Delete the droplet when the pull request closes with `command: down` and the same `name` (a droplet that is already gone is not an error); if that never runs, the timer does it. `command: run` takes `args` as one shell command, pipes and `&&` included. `config` takes a config file's contents (presets, budget). The runner's SSH key is added to the account for the step and removed again when the step ends (the droplet keeps it, so later steps can still SSH in), inputs reach the shell only as environment variables, and a generated password is masked in the log and left out of the step outputs.
 
 ## Presets
 

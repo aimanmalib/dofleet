@@ -130,3 +130,16 @@ Verified live: a non-dofleet droplet carrying `dofleet-exp-1000000000` showed `r
 Also in 0.1.1: the gate built its wheel check from `unzip -l | grep -q` pipes, which failed at random under `pipefail`
 (`SIGPIPE`, exit 141, one run in four on the host); it now lists the wheel once. The version is written in four places
 (pyproject, server.json twice, `__init__`); a test now fails when they differ, after the release notes had listed only two.
+
+## D16 (23 Nov 2026): the GitHub Action, run on GitHub for the first time
+D9 had only run `scripts/action.sh` locally with Actions-style variables. The first real run (workflow `action self-test`,
+manual, using the `DIGITALOCEAN_TOKEN` secret only for the run) failed before any of our code ran: GitHub refused to load
+`action.yml` because an input description contained `${{ github.event.number }}` ("Unrecognized named-value: 'github'").
+Every user of `aimanmalib/dofleet@main` would have hit that. Expressions are fine in defaults and in `runs`, not in
+descriptions; a test now checks that. The second run passed: `up` set the ip and name outputs, `down` deleted the droplet,
+and `run` executed `uname -a` on a fresh droplet and deleted it (2.8 min). It also showed a leak: each job left its runner
+SSH key (`dofleet-<hash>`) on the account, so a busy repository would collect hundreds. The step now records whether the
+key was on the account before it ran and removes it on exit only if the step added it and dofleet named it
+(`scripts/action_key.py`, standard library only). The droplet keeps the key, so later steps can still SSH in.
+Same day: `dofleet mcp` no longer exits when there is no token (directories such as Glama start the server to list its
+tools); calls report the missing token instead, and the argument descriptions now carry the policy limits.

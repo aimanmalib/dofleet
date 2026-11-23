@@ -13,6 +13,7 @@ import typer
 
 from . import bake as bakemod, faas, fleet, launch, ops, runjob, volumes
 from .cli import S, _kv, _pick, app, con, confirm, err, money, out_json, say, show_plan
+from .config import ConfigError
 from .i18n import t
 
 
@@ -147,5 +148,9 @@ def uninstall_reaper(yes: bool = typer.Option(False, "--yes", "-y")):
 
 @app.command("mcp", help="MCP server on stdio: let an AI agent borrow droplets under your policy")
 def mcp():
-    from .mcp_server import serve
-    serve(S.client(), S.settings, sys.stdin, sys.stdout)
+    from .mcp_server import MissingToken, serve
+    try:
+        client = S.client()
+    except ConfigError as e:  # still answer initialize and tools/list; tool calls report the missing token
+        client = MissingToken(e)
+    serve(client, S.settings, sys.stdin, sys.stdout)

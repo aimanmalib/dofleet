@@ -73,6 +73,9 @@ class FakeDO:
         if m == "GET" and (mm := re.fullmatch(r"/account/keys/([0-9a-f:]+)", path)):
             hit = [k for k in self.keys if k["fingerprint"] == mm.group(1)]
             return httpx.Response(200, json={"ssh_key": hit[0]}) if hit else httpx.Response(404, json={"message": "nf"})
+        if m == "DELETE" and (mm := re.fullmatch(r"/account/keys/(\d+)", path)):
+            self.keys = [k for k in self.keys if str(k["id"]) != mm.group(1)]
+            return httpx.Response(204)
         if m == "POST" and path == "/account/keys":
             from dofleet.ops import key_fingerprint
             k = {"id": 99, "name": body["name"], "fingerprint": key_fingerprint(body["public_key"]),

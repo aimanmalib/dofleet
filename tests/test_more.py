@@ -280,3 +280,36 @@ def test_orphan_volume_needs_an_hour_detached(fake):
 def test_down_missing_ok(fake):
     assert invoke("--json", "down", "pr-7", "--yes", "--missing-ok").exit_code == 0
     assert invoke("down", "pr-7", "--yes").exit_code == 1
+
+
+def test_mcp_starts_without_a_token_and_says_so_per_call(monkeypatch, tmp_path):
+    """Directories and MCP clients inspect the server before any token exists: initialize and tools/list must answer,
+    and a tool call must explain the missing token instead of the process exiting."""
+    monkeypatch.delenv("DIGITALOCEAN_TOKEN", raising=False)
+    monkeypatch.delenv("DIGITALOCEAN_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("DIGOCEAN_TOKEN", raising=False)
+    monkeypatch.setenv("DOFLEET_CONFIG", str(tmp_path / "none.toml"))
+    monkeypatch.setenv("DOFLEET_LANG", "en")
+    monkeypatch.setenv("HOME", str(tmp_path))  # no doctl config either
+    cli.S._client = None
+    lines = "\n".join(json.dumps(m) for m in [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "dofleet_list", "arguments": {}}}]) + "\n"
+    r = CliRunner().invoke(cli.app, ["mcp"], input=lines)
+    assert r.exit_code == 0, r.output
+    replies = [json.loads(x) for x in r.stdout.splitlines()]
+    assert replies[0]["result"]["serverInfo"]["name"] == "dofleet"
+    tools = {x["name"]: x for x in replies[1]["result"]["tools"]}
+    assert "tiny" in tools["dofleet_create"]["inputSchema"]["properties"]["preset"]["description"]  # policy shown
+    assert replies[2]["result"]["isError"] and "token" in replies[2]["result"]["content"][0]["text"].lower()
+
+
+def test_mcp_tool_arguments_all_have_descriptions(fake):
+    from dofleet import config
+    server = mcp_server.Server(cli.S._client, config.load(fake.cfg))
+    for tool in server.tools():
+        for arg, schema in tool["inputSchema"]["properties"].items():
+            assert schema.get("description"), f"{tool['name']}.{arg}"
+    exec_tool = next(x for x in mcp_server.TOOLS if x["name"] == "dofleet_exec")
+    assert "description" not in exec_tool["inputSchema"]["properties"]["name"]  # the shared TOOLS list is not mutated

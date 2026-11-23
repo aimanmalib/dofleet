@@ -7,6 +7,11 @@ if [ -n "${DOFLEET_CONFIG_TEXT:-}" ]; then
 fi
 mkdir -p ~/.ssh && [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/id_ed25519
 export DOFLEET_UPLOAD_KEY=always   # the runner's fresh key must reach the droplet even when the account has keys
+# ...and comes off the account again when this step ends: the droplet already has it, and otherwise every CI run would
+# leave one more SSH key on the account (measured: 2 per self-test run). A key that was there before the step stays.
+key_py="$DOFLEET_ACTION_PATH/scripts/action_key.py"
+key_before=$(python3 "$key_py" find ~/.ssh/id_ed25519.pub || echo "?")
+trap 'python3 "$key_py" forget ~/.ssh/id_ed25519.pub "$key_before" || true' EXIT
 extra=()
 [ "$DOFLEET_CMD" = run ] || read -r -a extra <<< "${DOFLEET_ARGS:-}"
 out="$RUNNER_TEMP/dofleet.json"
