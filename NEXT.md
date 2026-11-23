@@ -1,7 +1,7 @@
 # NEXT (start here)
 
 State: public since 23 Nov 2026 (CI green on 3.11 to 3.13, social preview set). 0.1.0 on PyPI + MCP Registry; `main` carries
-0.1.1 (not released yet). Every feature was run against a live account (02-DECISIONS.md D7, D9, D10, D15, D16). Operator notes
+0.1.1 (not released yet). Features were run against a live account (02-DECISIONS.md D7, D9, D10, D15, D16), except item 4. Operator notes
 for the author's own server live outside this repo.
 
 1. Release 0.1.1 (waiting for the owner's go): `gh release create v0.1.1` → release.yml does PyPI + registry. Afterwards check
