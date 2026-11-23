@@ -269,8 +269,11 @@ def reap(yes: bool = typer.Option(False, "--yes", "-y"), dry_run: bool = typer.O
         say(t("reap.orphans", names=", ".join(v["name"] for v in orphans)))
         if not dry_run and confirm(t("reap.orphans_confirm", n=len(orphans)), yes):
             volumes.cleanup(S.client(), [v["id"] for v in orphans])
+    swept = [] if dry_run else ops.sweep_tags(S.client(), now)  # empty timer tags left by earlier deletes
+    if swept:
+        say(t("reap.tags", n=len(swept)))
     if S.as_json and (dry_run or not victims):
-        out_json({"expired": [d["id"] for d in victims], "deleted": []})
+        out_json({"expired": [d["id"] for d in victims], "deleted": [], "tags_removed": swept})
         return
     if not victims:
         con.print(t("reap.none"))
@@ -293,7 +296,7 @@ def reap(yes: bool = typer.Option(False, "--yes", "-y"), dry_run: bool = typer.O
     _notify_reap(deleted, failed, timed_out)
     if S.as_json:
         out_json({"expired": [d["id"] for d in victims], "deleted": [d["id"] for d in deleted],
-                  "failed": [d["id"] for d in failed]})
+                  "failed": [d["id"] for d in failed], "tags_removed": swept})
     else:
         con.print(t("down.done", n=len(deleted)))
         if failed:

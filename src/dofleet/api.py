@@ -140,6 +140,13 @@ class DOClient:
         self.request("DELETE", f"/tags/{tag}/resources",
                      json={"resources": [{"resource_id": str(droplet_id), "resource_type": kind}]})
 
+    def tags(self) -> list[dict]:
+        return list(self.paginate("/tags", "tags"))
+
+    def delete_tag(self, tag: str) -> None:
+        """Deleting a tag also strips it from every resource that still carries it: callers check it is empty first."""
+        self.request("DELETE", f"/tags/{tag}")
+
 
 def public_ipv4(droplet: dict) -> str | None:
     for net in (droplet.get("networks") or {}).get("v4", []):

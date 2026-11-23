@@ -4,18 +4,25 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dofleet"
-version = "0.1.0"
+version = "0.1.1"
 description = "Disposable DigitalOcean droplets that delete themselves: expiry timers, a month budget, one-command jobs and an MCP server for AI agents."
 dynamic = ["readme"]
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Aiman Malib" }]
-keywords = ["digitalocean", "droplet", "cli", "cloud", "cost"]
+keywords = ["digitalocean", "droplet", "cli", "cloud", "cost", "ephemeral", "reaper", "mcp", "mcp-server", "ai-agents",
+            "github-action"]
 classifiers = [
+  "Development Status :: 4 - Beta",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
+  "Natural Language :: English",
+  "Natural Language :: Malay",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: System :: Systems Administration",
 ]
 dependencies = ["httpx>=0.27", "typer>=0.12", "rich>=13"]
@@ -27,7 +34,10 @@ dev = ["pytest>=8"]
 dofleet = "dofleet.cli:main"
 
 [project.urls]
+Homepage = "https://github.com/aimanmalib/dofleet"
 Source = "https://github.com/aimanmalib/dofleet"
+Issues = "https://github.com/aimanmalib/dofleet/issues"
+Changelog = "https://github.com/aimanmalib/dofleet/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dofleet"]
@@ -45,3 +55,12 @@ path = "README.md"
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = '(src|srcset)="assets/'
 replacement = '\1="https://raw.githubusercontent.com/aimanmalib/dofleet/main/assets/'
+
+# Links to other repo files (README.ms.md, 02-DECISIONS.md, ...) point at GitHub; #anchors work on PyPI as they are.
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = 'href="(?!https?://|#|mailto:)([^"]+)"'
+replacement = 'href="https://github.com/aimanmalib/dofleet/blob/main/\1"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '\]\((?!https?://|#|mailto:|assets/)([^)\s]+)\)'
+replacement = '](https://github.com/aimanmalib/dofleet/blob/main/\1)'

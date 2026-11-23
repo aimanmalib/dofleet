@@ -58,7 +58,7 @@ Senarai penuh, contoh config, GitHub Action dan butiran keselamatan ada dalam [R
 
 ## Keselamatan
 
-- `reap` dan reaper Function hanya menyentuh droplet bertag `dofleet`, dan membaca semula setiap droplet sebelum memadam. Corak dalam `down` (`'web-*'`) hanya padan droplet dofleet kecuali dengan `--any`; `extend` menolak droplet bukan dofleet.
+- `reap` dan reaper Function hanya menyentuh droplet bertag `dofleet`, dan membaca semula setiap droplet sebelum memadam. Tag pemasa kosong (`dofleet-exp-*`, `dofleet-detached-*`) yang ditinggalkan droplet dan volume yang sudah dipadam turut dibuang selepas masanya lewat sejam; tag lain tidak disentuh. Corak dalam `down` (`'web-*'`) hanya padan droplet dofleet kecuali dengan `--any`; `extend` menolak droplet bukan dofleet.
 - `notify_cmd` dalam config boleh membawa `{message}` dan `{level}` dalam mana-mana argumen, cth `["/usr/local/bin/notify.sh", "{message}", "{level}"]`. Tahapnya `info` bila droplet dipadam kerana pemasanya tamat (dijangka, tiada tindakan), `warn` bila bajet bulanan menyebabkan reaper memadamnya, dan `critical` bila padam gagal dan droplet masih berjalan. Tanpa `{message}`, mesej ditambah sebagai argumen terakhir seperti dahulu.
 - Ejen AI melalui MCP hanya nampak droplet yang ia cipta sendiri (tag `dofleet-mcp`), bukan droplet anda.
 - Fail yang dibawa balik oleh `run` dibuka dengan penapis `data` tarfile: tiada laluan mutlak, `..` atau pautan keluar.

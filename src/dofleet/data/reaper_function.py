@@ -4,7 +4,8 @@ Standalone on purpose: the Functions runtime has only the standard library. Rule
 - droplets tagged `dofleet` whose `dofleet-exp-<unix time>` (+ grace) has passed are deleted with their dofleet volumes;
 - when month-to-date usage has reached `budget_usd` and budget_action is "reap", every dofleet droplet is deleted;
 - dofleet volumes attached to nothing for over an hour are deleted ("since when" = a dofleet-detached-<time> tag
-  set the first time a run sees the volume detached, so a volume someone just moved by hand is not lost).
+  set the first time a run sees the volume detached, so a volume someone just moved by hand is not lost);
+- empty dofleet-exp-<time> / dofleet-detached-<time> tags whose time is over an hour past are deleted.
 Parameters (set at install): token, grace_s, budget_usd, budget_action, notify_url, dry_run."""
 
 import json
@@ -106,7 +107,30 @@ def reap(call, now, grace_s=0, budget_usd=0.0, budget_action="reap", dry_run=Fal
         if not dry_run:
             call("DELETE", f"/volumes/{v['id']}")
     return {"deleted": done, "failed": failed, "orphan_volumes": [v["name"] for v in orphans],
-            "over_budget": over, "checked": len(mine), "dry_run": dry_run}
+            "over_budget": over, "checked": len(mine), "dry_run": dry_run,
+            "tags_removed": [] if dry_run else sweep_tags(call, now)}
+
+
+def sweep_tags(call, now, min_age_s=3600):
+    """Same rule as `dofleet reap`: a timer tag nothing carries, whose time is over an hour past, cannot be in the
+    middle of being added (new droplets get a future time, sweeps stamp the current one), and DigitalOcean keeps
+    empty tags forever. Housekeeping only: any error skips it."""
+    removed = []
+    try:
+        in_use = {t for d in all_pages(call, "/droplets", "droplets") for t in d.get("tags") or []}
+        in_use |= {t for v in all_pages(call, "/volumes", "volumes") for t in v.get("tags") or []}
+        for tag in all_pages(call, "/tags", "tags"):
+            name = tag.get("name") or ""
+            for prefix in (EXP, DETACHED):
+                when = name[len(prefix):]
+                if (name.startswith(prefix) and when.isdigit() and int(when) <= now - min_age_s
+                        and (tag.get("resources") or {}).get("count") == 0 and name not in in_use):
+                    status, _ = call("DELETE", f"/tags/{name}")
+                    if status in (204, 404):
+                        removed.append(name)
+    except (RuntimeError, OSError, ValueError):
+        pass
+    return removed
 
 
 def notify(url, result):

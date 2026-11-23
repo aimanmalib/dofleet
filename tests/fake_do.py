@@ -37,6 +37,8 @@ class FakeDO:
         self.namespaces: list[dict] = []
         self.triggers: list[dict] = []
         self.page_size = 2  # force pagination in tests
+        self.tag_names: dict[str, None] = {}  # account-level tags; DigitalOcean keeps them after their resources go
+        self.tags_status = 200  # set to 403 to act like a token without tag scopes
 
     def add(self, name, tags=(), created="2026-01-01T00:00:00Z", size=SIZES[0], status="active", ip="203.0.113.5"):
         self.next_id += 1
@@ -44,6 +46,7 @@ class FakeDO:
              "size_slug": size["slug"], "size": size, "region": {"slug": "sgp1"},
              "networks": {"v4": [{"type": "public", "ip_address": ip}] if ip else []}}
         self.droplets[d["id"]] = d
+        self.tag_names.update(dict.fromkeys(tags))  # creating a tagged droplet creates its tags
         return d
 
     def transport(self) -> httpx.MockTransport:
@@ -154,7 +157,25 @@ class FakeDO:
                 return httpx.Response(201, json={"action": {"id": 77, "status": "in-progress"}})
             return httpx.Response(201, json={"action": {"type": body["type"], "status": "in-progress"}})
         if m == "POST" and path == "/tags":
+            self.tag_names[body["name"]] = None
             return httpx.Response(201, json={"tag": {"name": body["name"]}})
+        if m == "GET" and path == "/tags":
+            if self.tags_status != 200:
+                return httpx.Response(self.tags_status, json={"id": "forbidden", "message": "missing scope"})
+            carriers = [*self.droplets.values(), *self.vols.values()]
+            names = {**self.tag_names, **dict.fromkeys(x for r in carriers for x in r.get("tags") or [])}
+            items = [{"name": n, "resources": {"count": sum(n in (r.get("tags") or []) for r in carriers)}} for n in names]
+            return httpx.Response(200, json=self._page(req, "tags", items))
+        if m == "DELETE" and (mm := re.fullmatch(r"/tags/([^/]+)", path)):
+            name = mm.group(1)
+            carriers = [*self.droplets.values(), *self.vols.values()]
+            if name not in self.tag_names and not any(name in (r.get("tags") or []) for r in carriers):
+                return httpx.Response(404, json={"id": "not_found", "message": "tag not found"})
+            self.tag_names.pop(name, None)
+            for r in carriers:  # documented API behaviour: the tag comes off everything that still had it
+                if name in (r.get("tags") or []):
+                    r["tags"].remove(name)
+            return httpx.Response(204)
         if mm := re.fullmatch(r"/tags/([^/]+)/resources", path):
             for r in body["resources"]:
                 if r.get("resource_type") == "volume":
@@ -163,6 +184,7 @@ class FakeDO:
                     tags = self.droplets[int(r["resource_id"])]["tags"]
                 if m == "POST" and mm.group(1) not in tags:
                     tags.append(mm.group(1))
+                    self.tag_names[mm.group(1)] = None
                 if m == "DELETE" and mm.group(1) in tags:
                     tags.remove(mm.group(1))
             return httpx.Response(204)

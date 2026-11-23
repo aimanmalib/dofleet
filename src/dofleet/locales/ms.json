@@ -110,6 +110,7 @@
  "cost.orphans": "{n} volume dofleet, {gb} GB, tidak dipasang pada apa-apa dan masih dicaj: {names}. `dofleet reap` memadamnya.",
  "reap.orphans": "Volume dofleet tertinggal: {names}",
  "reap.orphans_confirm": "Padam {n} volume yang tidak dipasang?",
+ "reap.tags": "Membuang {n} tag dofleet kosong yang ditinggalkan oleh droplet dan volume yang sudah dipadam.",
  "down.volumes_async": "Volume dofleet mereka turut dipadam; DigitalOcean menyiapkannya dalam satu dua minit.",
  "err.template_shebang": "Templat '{name}' mesti bermula dengan baris #! untuk menambah pemasangan volume.",
  "plan.budget": "Bajet",

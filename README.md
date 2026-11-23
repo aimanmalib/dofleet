@@ -52,7 +52,7 @@ If you already use doctl, `dofleet` reads its token, so there is nothing to set 
 pipx install dofleet        # or: uv tool install dofleet
 ```
 
-Python 3.11 or newer, plus `ssh` and `tar` for `run`. Until the first PyPI release: `pipx install git+https://github.com/aimanmalib/dofleet`.
+Python 3.11 or newer, plus `ssh` and `tar` for `run`. Latest `main` instead of the release: `pipx install git+https://github.com/aimanmalib/dofleet`.
 
 ## Token
 
@@ -91,7 +91,7 @@ dofleet install-reaper --every 10m            # runs in your DigitalOcean accoun
 */10 * * * * DIGITALOCEAN_TOKEN=dop_v1_... /home/you/.local/bin/dofleet reap --yes >> ~/.dofleet-reap.log 2>&1
 ```
 
-It only touches droplets tagged `dofleet` with a passed `dofleet-exp-<unix time>` tag (re-read just before deleting, in case someone extended it), their `dofleet` volumes, and `dofleet` volumes that have been attached to nothing for over an hour, counted from when a reaper first saw them detached, so a volume you just moved is safe. Droplets you made by hand are never touched. The Function version stores the token in your own Functions namespace; give it a separate token with `--token-env` if you prefer. `--notify-url` posts a short report to a Slack or Discord style webhook; locally, `notify_cmd` in the config runs any command:
+It only touches droplets tagged `dofleet` with a passed `dofleet-exp-<unix time>` tag (re-read just before deleting, in case someone extended it), their `dofleet` volumes, and `dofleet` volumes that have been attached to nothing for over an hour, counted from when a reaper first saw them detached, so a volume you just moved is safe. Droplets you made by hand are never touched. DigitalOcean keeps a tag after the last thing carrying it is gone, so the reaper also deletes empty `dofleet-exp-*` and `dofleet-detached-*` tags once their time is an hour past; other tags stay. The Function version stores the token in your own Functions namespace; give it a separate token with `--token-env` if you prefer. `--notify-url` posts a short report to a Slack or Discord style webhook; locally, `notify_cmd` in the config runs any command:
 
 ```toml
 [defaults]
@@ -160,7 +160,7 @@ jobs:
       - run: echo "Preview at http://${{ steps.box.outputs.ip }}"
 ```
 
-Delete it when the pull request closes with `command: down` and the same `name` (a droplet that is already gone is not an error); if that never runs, the timer does it. `command: run` takes `args` as one shell command, pipes and `&&` included. `config` takes a config file's contents (presets, budget). The runner's SSH key is added to the account automatically, inputs reach the shell only as environment variables, and a generated password is masked in the log and left out of the step outputs.
+For anything that matters, pin a release tag or a commit SHA instead of `@main`. Delete the droplet when the pull request closes with `command: down` and the same `name` (a droplet that is already gone is not an error); if that never runs, the timer does it. `command: run` takes `args` as one shell command, pipes and `&&` included. `config` takes a config file's contents (presets, budget). The runner's SSH key is added to the account automatically, inputs reach the shell only as environment variables, and a generated password is masked in the log and left out of the step outputs.
 
 ## Presets
 

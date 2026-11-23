@@ -110,6 +110,7 @@
  "cost.orphans": "{n} dofleet volume(s), {gb} GB, attached to nothing and still billing: {names}. `dofleet reap` deletes them.",
  "reap.orphans": "Left-over dofleet volumes: {names}",
  "reap.orphans_confirm": "Delete {n} unattached volume(s)?",
+ "reap.tags": "Removed {n} empty dofleet tag(s) left behind by deleted droplets and volumes.",
  "down.volumes_async": "Their dofleet volumes are being deleted too; DigitalOcean finishes that within a minute or two.",
  "err.template_shebang": "Template '{name}' must start with a #! line to add volume mounting.",
  "plan.budget": "Budget",

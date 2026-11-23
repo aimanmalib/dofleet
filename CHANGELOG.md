@@ -1,10 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (23 Nov 2026)
 
+- `reap` and the Function reaper delete the empty `dofleet-exp-*` and `dofleet-detached-*` tags that deleted droplets and
+  volumes leave behind. DigitalOcean keeps a tag forever, so every droplet used to add one to the account for good. Only
+  tags nobody carries and whose time is over an hour past are touched; other tags stay. A token without tag scopes still reaps.
+  After upgrading, run `dofleet install-reaper` again so the Function gets the new code.
 - `notify_cmd` can carry `{message}` and `{level}` placeholders. `reap` sends `info` for droplets whose timer ran out,
   `warn` for droplets deleted because the month budget was reached, and `critical` when a delete fails (a failed delete
   used to send nothing). Messages now say why it happened and what to do. Configs without placeholders work as before.
+- `dofleet cost` says how old DigitalOcean's month-to-date figure is when it is over an hour old (`usage_age_h` in JSON).
+- PyPI page: links to other repo files point at GitHub, project links (issues, changelog), Python version classifiers.
 
 ## 0.1.0 (23 Nov 2026)
 

@@ -115,3 +115,18 @@ braces in droplet names pass through; no `{message}` = message appended, so old 
 (timer ran out), `warn` (budget kill), `critical` (one or more deletes failed, one separate message). Messages say what, why
 and what to do, in English and Malay. The argv is built in `dofleet/notify.py`, standard library only, so host checks can load
 it on its own. The Functions reaper webhook is unchanged. What reap deletes is unchanged.
+
+## D15 (23 Nov 2026): the reaper also removes the timer tags it leaves behind
+Measured on the test account: 25 tags, 18 of them empty `dofleet-exp-<time>` tags from droplets deleted the day before.
+DigitalOcean keeps a tag after the last resource carrying it is gone, so each droplet added one to the account for good
+(a CI job per pull request would add hundreds). `reap` and the Function reaper now delete `dofleet-exp-*` and
+`dofleet-detached-*` tags when DigitalOcean counts no resources on them, no droplet or volume listed in the same run carries
+them, and their time is at least an hour past. The time rule is what makes it safe: deleting a tag strips it from everything
+that has it, and new droplets and `extend` only ever write a future time while a sweep stamps the current one, so nothing
+can be adding such a tag during the delete. Other tags (`dofleet`, `dofleet-preset-*`, anything of yours) are never touched.
+Housekeeping only: a token without tag scopes, or a failed delete, skips it and the reap carries on.
+Verified live: a non-dofleet droplet carrying `dofleet-exp-1000000000` showed `resources.count` 1 and kept its tag while the
+18 empty ones went; after the droplet was deleted the count dropped to 0 and the next run removed it.
+Also in 0.1.1: the gate built its wheel check from `unzip -l | grep -q` pipes, which failed at random under `pipefail`
+(`SIGPIPE`, exit 141, one run in four on the host); it now lists the wheel once. The version is written in four places
+(pyproject, server.json twice, `__init__`); a test now fails when they differ, after the release notes had listed only two.

@@ -302,6 +302,42 @@ def orphan_volumes(client: DOClient, now: float, min_age_s: int = 3600, mark: bo
     return out
 
 
+def stale_tags(client: DOClient, now: float, min_age_s: int = 3600, in_use: frozenset | set = frozenset()) -> list[str]:
+    """`dofleet-exp-<time>` and `dofleet-detached-<time>` tags that nothing carries any more. Each droplet leaves one
+    behind, and DigitalOcean keeps empty tags forever. Only tags whose time is at least min_age_s in the past qualify:
+    new droplets and `extend` always write a future time and a sweep stamps the current time, so nothing can be adding
+    one of these while it is deleted (deleting a tag would strip it from anything that still had it). A tag must also
+    be empty by DigitalOcean's count and absent from `in_use` (tags seen on droplets and volumes just now)."""
+    out = []
+    for tag in client.tags():
+        name = tag.get("name") or ""
+        for prefix in (fleet.EXP_PREFIX, DETACHED_PREFIX):
+            when = name[len(prefix):]
+            if (name.startswith(prefix) and when.isdigit() and int(when) <= now - min_age_s
+                    and (tag.get("resources") or {}).get("count") == 0 and name not in in_use):
+                out.append(name)
+    return out
+
+
+def sweep_tags(client: DOClient, now: float) -> list[str]:
+    """Delete stale dofleet tags. Housekeeping only: a token without tag scopes or a failed delete is skipped."""
+    try:
+        in_use = {x for d in client.droplets() for x in d.get("tags") or []}
+        in_use |= {x for v in client.volumes() for x in v.get("tags") or []}
+        stale = stale_tags(client, now, in_use=in_use)
+    except ApiError:
+        return []
+    removed = []
+    for name in stale:
+        try:
+            client.delete_tag(name)
+            removed.append(name)
+        except ApiError as e:
+            if e.status == 404:  # the other reaper got there first
+                removed.append(name)
+    return removed
+
+
 def cost_summary(client: DOClient, now: float) -> dict:
     bal = client.balance()
     ds = client.droplets()
