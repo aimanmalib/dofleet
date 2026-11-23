@@ -11,21 +11,6 @@ from fake_do import FakeDO
 runner = CliRunner()
 
 
-@pytest.fixture
-def fake(monkeypatch, tmp_path):
-    fd = FakeDO()
-    monkeypatch.setenv("DOFLEET_CONFIG", str(tmp_path / "config.toml"))
-    monkeypatch.setenv("DOFLEET_LANG", "en")
-    monkeypatch.setenv("DIGITALOCEAN_TOKEN", "t")
-    cli.S._client = DOClient("t", transport=fd.transport(), sleep=lambda s: None)
-    monkeypatch.setattr(ready, "port_open", lambda ip, port, timeout=5.0: True)
-    monkeypatch.setattr(ready, "cloud_init_state", lambda ip, identity=None, droplet_id=None: "done")
-    monkeypatch.setenv("HOME", str(tmp_path))  # no real ~/.ssh keys leak into tests
-    monkeypatch.setattr(ready.time, "sleep", lambda s: None)
-    yield fd
-    cli.S._client = None
-
-
 def run(*args):
     return runner.invoke(cli.app, list(args), catch_exceptions=False)
 

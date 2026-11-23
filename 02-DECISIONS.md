@@ -105,3 +105,13 @@ and 0.00 minutes later, with `generated_at` 19 hours old. dofleet trusted the fi
 (deleted within 3 minutes). Not fixable on our side: there is no fresher source for month-to-date usage. Changes: README says the
 budget is a guard, not a real-time meter; `cost` prints the age of the figure when it is over an hour old (`usage_age_h` in JSON).
 Committed spend of running droplets (D10) is still computed live, which is what actually stops a runaway batch.
+
+## D14 (23 Nov 2026): reap notifications carry a level
+A routine reap of a one-minute test droplet (created while verifying the Functions reaper, D9) reached the operator as a red
+alert: `notify_cmd` got the message as its only argument, and a server-wide notifier that defaults to `critical` cannot tell an
+expected cleanup from a problem. The delete itself was correct. A failed delete, which leaves a droplet running and costing
+money, sent nothing at all. Changes: `notify_cmd` takes `{message}` and `{level}` placeholders (plain token replacement, so
+braces in droplet names pass through; no `{message}` = message appended, so old configs keep working); levels are `info`
+(timer ran out), `warn` (budget kill), `critical` (one or more deletes failed, one separate message). Messages say what, why
+and what to do, in English and Malay. The argv is built in `dofleet/notify.py`, standard library only, so host checks can load
+it on its own. The Functions reaper webhook is unchanged. What reap deletes is unchanged.

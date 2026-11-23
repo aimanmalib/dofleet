@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `notify_cmd` can carry `{message}` and `{level}` placeholders. `reap` sends `info` for droplets whose timer ran out,
+  `warn` for droplets deleted because the month budget was reached, and `critical` when a delete fails (a failed delete
+  used to send nothing). Messages now say why it happened and what to do. Configs without placeholders work as before.
+
 ## 0.1.0 (23 Nov 2026)
 
 First version. Rewritten from scratch; it shares no code with the private scripts it replaces.

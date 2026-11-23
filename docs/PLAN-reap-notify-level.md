@@ -38,13 +38,20 @@ any change to what reap deletes.
 
 Replace this block each slice. When every slice is done its first line becomes `**PELAN SIAP**`.
 
-Nothing built yet. P1 is next: code + tests in this repo. P2 is the host config change and runs on the host.
+P1 done (23 Nov 2026): `src/dofleet/notify.py` (`build_argv`), `cli._notify(message, level)` with `info` / `warn` / `critical`,
+clearer en/ms texts (`reap.notify`, `reap.notify_budget`, `reap.notify_failed`), `tests/test_notify_level.py` (7 tests, all red on
+the old code, green now), shared `fake` fixture moved to `tests/conftest.py`, README/README.ms/CHANGELOG, decision record **D14**
+(D11 was already taken). `scripts/gate.sh` green (62 passed, wheel ok).
+
+**P2 is next and runs on the host** (not a cloud session): switch the operator config to
+`notify_cmd = [<notifier>, "{message}", "{level}"]`, load it with the repo venv and check `build_argv` gives level `info` for a
+reap message, then confirm the next scheduled reap run exits 0. Do not run reap by hand and do not create droplets to test.
 
 ## Progress
 
 | # | Slice | Who | Proof needed for done | Status |
 |---|---|---|---|---|
-| P1 | `src/dofleet/notify.py` + `cli._notify(message, level)` + failure/budget levels + clearer en/ms texts + `tests/test_notify_level.py` + README/README.ms/CHANGELOG/02-DECISIONS | agent | `tests/test_notify_level.py` drives `reap` through `cli.app` with a fake notify command (no module-level import of new names) and fails on the old code; `scripts/gate.sh` green; existing `test_reap_notifies_and_survives_errors` still passes | ⬜ |
+| P1 | `src/dofleet/notify.py` + `cli._notify(message, level)` + failure/budget levels + clearer en/ms texts + `tests/test_notify_level.py` + README/README.ms/CHANGELOG/02-DECISIONS (D14) | agent | `tests/test_notify_level.py` drives `reap` through `cli.app` with a fake notify command (no module-level import of new names) and fails on the old code; `scripts/gate.sh` green; existing `test_reap_notifies_and_survives_errors` still passes | ✅ 23 Nov |
 | P2 | [hos] switch the host's operator config to the placeholder form and confirm the next cron run | agent | host config contains `{message}` and `{level}`; `build_argv` on that config yields level `info` for a reap; next scheduled reap run exits 0 | ⬜ |
 
 ## Tests P1 must contain (all through `cli.app`, fake API from `tests/fake_do.py`)

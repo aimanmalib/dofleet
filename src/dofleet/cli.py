@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from . import __version__, budget, cloudinit, config, fleet, launch, ops, volumes
+from . import __version__, budget, cloudinit, config, fleet, launch, notify, ops, volumes
 from .api import ApiError, DOClient
 from .i18n import set_lang, t, resolve
 
@@ -257,6 +257,7 @@ def down(patterns: list[str] = typer.Argument(...), yes: bool = typer.Option(Fal
 def reap(yes: bool = typer.Option(False, "--yes", "-y"), dry_run: bool = typer.Option(False, "--dry-run")):
     now = time.time()
     victims = ops.reap_list(S.client(), S.settings, now)
+    timed_out = {d["id"] for d in victims}
     st = budget.status(S.client(), S.settings)
     if st.over:
         err.print(f"[red]{t('reap.over_budget', used=money(st.used), budget=money(st.budget))}[/]")
@@ -289,8 +290,7 @@ def reap(yes: bool = typer.Option(False, "--yes", "-y"), dry_run: bool = typer.O
             deleted.append(d)
         except ApiError as e:
             (deleted if e.status == 404 else failed).append(d)  # 404 = someone else already deleted it
-    if deleted:
-        _notify(t("reap.notify", n=len(deleted), names=", ".join(d["name"] for d in deleted)))
+    _notify_reap(deleted, failed, timed_out)
     if S.as_json:
         out_json({"expired": [d["id"] for d in victims], "deleted": [d["id"] for d in deleted],
                   "failed": [d["id"] for d in failed]})
@@ -308,15 +308,27 @@ def _owned_volumes(droplets: list[dict]) -> set[str]:
     return {v["id"] for v in S.client().volumes() if fleet.MARK_TAG in (v.get("tags") or [])}
 
 
-def _notify(message: str) -> None:
-    cmd = S.settings.defaults.get("notify_cmd") or []
-    if isinstance(cmd, str):
-        cmd = [cmd]
-    if not cmd:
+def _notify_reap(deleted: list[dict], failed: list[dict], timed_out: set) -> None:
+    """Timer ran out = info (expected), budget kill = warn, failed delete = critical (still costing money)."""
+    def names(ds):
+        return ", ".join(d["name"] for d in ds)
+    expired = [d for d in deleted if d["id"] in timed_out]
+    over = [d for d in deleted if d["id"] not in timed_out]
+    if expired:
+        _notify(t("reap.notify", n=len(expired), names=names(expired)), "info")
+    if over:
+        _notify(t("reap.notify_budget", n=len(over), names=names(over)), "warn")
+    if failed:
+        _notify(t("reap.notify_failed", n=len(failed), names=names(failed)), "critical")
+
+
+def _notify(message: str, level: str = "info") -> None:
+    argv = notify.build_argv(S.settings.defaults.get("notify_cmd"), message, level)
+    if not argv:
         return
     import subprocess
     try:
-        subprocess.run([*cmd, message], timeout=30, check=False)
+        subprocess.run(argv, timeout=30, check=False)
     except (OSError, subprocess.TimeoutExpired) as e:
         err.print(f"[yellow]{t('warn.notify', err=e)}[/]")
 

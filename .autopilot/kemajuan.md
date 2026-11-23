@@ -1,0 +1,3 @@
+- P1 code + tests + docs done, gate green (62 passed).
+- Now: commit, push to main, write hasil.json.
+- No blockers. P2 is a host slice.

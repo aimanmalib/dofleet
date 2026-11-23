@@ -91,7 +91,14 @@ dofleet install-reaper --every 10m            # runs in your DigitalOcean accoun
 */10 * * * * DIGITALOCEAN_TOKEN=dop_v1_... /home/you/.local/bin/dofleet reap --yes >> ~/.dofleet-reap.log 2>&1
 ```
 
-It only touches droplets tagged `dofleet` with a passed `dofleet-exp-<unix time>` tag (re-read just before deleting, in case someone extended it), their `dofleet` volumes, and `dofleet` volumes that have been attached to nothing for over an hour, counted from when a reaper first saw them detached, so a volume you just moved is safe. Droplets you made by hand are never touched. The Function version stores the token in your own Functions namespace; give it a separate token with `--token-env` if you prefer. `--notify-url` posts a short report to a Slack or Discord style webhook; locally, `notify_cmd` in the config runs any command.
+It only touches droplets tagged `dofleet` with a passed `dofleet-exp-<unix time>` tag (re-read just before deleting, in case someone extended it), their `dofleet` volumes, and `dofleet` volumes that have been attached to nothing for over an hour, counted from when a reaper first saw them detached, so a volume you just moved is safe. Droplets you made by hand are never touched. The Function version stores the token in your own Functions namespace; give it a separate token with `--token-env` if you prefer. `--notify-url` posts a short report to a Slack or Discord style webhook; locally, `notify_cmd` in the config runs any command:
+
+```toml
+[defaults]
+notify_cmd = ["/usr/local/bin/notify.sh", "{message}", "{level}"]
+```
+
+`{message}` and `{level}` can sit in any argument. `{level}` is `info` when droplets were deleted because their timer ran out (expected, nothing to do), `warn` when the month budget made the reaper delete them, and `critical` when a delete failed and the droplet is still running. Without `{message}` the message is added as the last argument, as before.
 
 ## Budget
 
