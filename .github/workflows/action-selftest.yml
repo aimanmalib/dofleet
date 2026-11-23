@@ -1,0 +1,44 @@
+name: action self-test
+# Runs this repo's GitHub Action against a real DigitalOcean account. Manual only, and only with the
+# DIGITALOCEAN_TOKEN repository secret set (set it for the run, delete it after). Each job makes one
+# small droplet for a few minutes; the timer and `down` clean up.
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  up-down:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: box
+        uses: ./
+        with:
+          token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          preset: tiny
+          name: selftest-${{ github.run_id }}
+          ttl: 30m
+      - name: Outputs are set
+        env:
+          IP: ${{ steps.box.outputs.ip }}
+          NAME: ${{ steps.box.outputs.name }}
+        run: |
+          echo "ip=$IP name=$NAME"
+          test -n "$IP" && test "$NAME" = "selftest-${{ github.run_id }}"
+      - if: always()
+        uses: ./
+        with:
+          token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          command: down
+          name: selftest-${{ github.run_id }}
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          command: run
+          preset: tiny
+          name: selftest-run-${{ github.run_id }}
+          ttl: 30m
+          args: uname -a && echo dofleet-selftest-ok
