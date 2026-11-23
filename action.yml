@@ -17,7 +17,7 @@ inputs:
     required: false
     default: tiny
   name:
-    description: Droplet name. For pull request previews use something like pr-${{ github.event.number }}
+    description: Droplet name, e.g. pr-123 for a pull request preview (build it from github.event.number in your workflow)
     required: false
     default: ci-${{ github.run_id }}
   ttl:
