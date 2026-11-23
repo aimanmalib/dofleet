@@ -10,8 +10,9 @@ author's own server live outside this repo.
 2. GitHub Action: run for real on GitHub 23 Nov (workflow `action self-test`, manual). To run it again: set the repository secret
    `DIGITALOCEAN_TOKEN` (a test account token), `gh workflow run action-selftest.yml`, check that no droplet or `dofleet-*` SSH key
    is left on the account, then delete the secret.
-3. Listings: official MCP Registry done; mcpservers.org submitted 23 Nov (free review, up to 2 weeks). Glama needs the owner to
-   sign in with GitHub and add the repo; once it has a score, open the punkpeye/awesome-mcp-servers PR (Cloud Platforms, Glama badge
-   required). MCP Market and mcp.so only offered paid listings on 23 Nov (skipped). DigitalOcean Community Tools: form behind the
-   owner's DigitalOcean login. PulseMCP picks up the registry by itself when submissions reopen. Write for DOnations is paused.
+3. Listings (23 Nov 2026): official MCP Registry; Glama approved, rated B (badge in README); punkpeye/awesome-mcp-servers
+   PR #20474 (Cloud Platforms, after `agentmetal/mcp`; merges come in batches, median about 9 days); mcpservers.org submitted
+   (free review, up to 2 weeks); DigitalOcean Community Tools form submitted, not public yet (check
+   https://www.digitalocean.com/rss/community/tools.atom). MCP Market and mcp.so only offered paid listings (skipped). PulseMCP
+   picks up the registry by itself when submissions reopen. Write for DOnations is paused.
 4. Not yet verified: a graphical RDP session to `desktop`; GPU presets on an account with GPU access.
