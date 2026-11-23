@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 (23 Nov 2026)
+
+Documentation only; no code changes.
+
+- The design decisions moved to `docs/DECISIONS.md`. The 0.1.1 PyPI page linked the old location, which no longer exists.
+- README: Glama score badge and a Work with Sasa Teguh card.
+
 ## 0.1.1 (23 Nov 2026)
 
 - `reap` and the Function reaper delete the empty `dofleet-exp-*` and `dofleet-detached-*` tags that deleted droplets and

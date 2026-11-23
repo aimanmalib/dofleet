@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dofleet"
-version = "0.1.1"
+version = "0.1.2"
 description = "Disposable DigitalOcean droplets that delete themselves: expiry timers, a month budget, one-command jobs and an MCP server for AI agents."
 dynamic = ["readme"]
 requires-python = ">=3.11"
